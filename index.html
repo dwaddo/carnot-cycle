@@ -75,7 +75,7 @@
   .wcell { background: #ffffff; border: 2px solid var(--line); border-radius: 8px; padding: 4px 12px; }
   .wcell.active { border-color: var(--work); }
   .wcell.net { border-color: var(--work); background: #f3effc; }
-  .wcell .wl { font-size: 22px; color: var(--muted); white-space: nowrap; }
+  .wcell .wl { font-size: 24px; color: var(--muted); white-space: nowrap; }
   .wcell .wv { font-size: 26px; font-weight: 700; color: var(--work); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .wcell.empty .wv { color: #a0aec0; }
 
@@ -317,8 +317,9 @@ var CarnotPhysics = (function () {
 
   /**
    * Running totals after nDone complete strokes plus a fraction s of the next.
-   * works[k] is W_(k+1) for that stroke in the mode's sign convention, or null
-   * if that stroke has not started.
+   * works[k] is W_(k+1), the work done BY the gas on that stroke (the same
+   * convention in both modes, so ΔU = Q − W everywhere), or null if that
+   * stroke has not started. Running the cycle backwards flips each sign.
    */
   function runningTotals(cyc, mode, nDone, s) {
     var strokes = strokesFor(cyc, mode), sg = ledgerSign(mode);
@@ -331,7 +332,7 @@ var CarnotPhysics = (function () {
       if (strokes[i].reservoir === 'hot') Qhot += e.Q;
       if (strokes[i].reservoir === 'cold') Qcold += e.Q;
       W += e.W;
-      works[i] = sg * e.W;
+      works[i] = e.W;
     }
     return { QH: sg * Qhot, QC: -sg * Qcold, W: sg * W, works: works };
   }
@@ -415,7 +416,20 @@ function carnotSelfCheck() {
   check('home heat pump COP = Q_H/W', homeHP.QH / homeHP.W, 318 / 40, 1e-9);
   check('home heat pump Q_H = W + Q_C', homeHP.QH - homeHP.W - homeHP.QC, 0, 1e-9, 'J');
   var en = P.runningTotals(cyc, 'engine', 4, 0);
-  check('engine ledger W = ΣW_k', en.W - en.works.reduce(function (a, b) { return a + b; }, 0), 0, 1e-9, 'J');
+  var sumW = function (t) { return t.works.reduce(function (a, b) { return a + b; }, 0); };
+  check('engine: W out = ΣW_k', en.W - sumW(en), 0, 1e-9, 'J');
+  check('heat pump: W in = −ΣW_k', hp.W + sumW(hp), 0, 1e-9, 'J');
+  // Every W_k must agree with the first law ΔU = Q − W on its stroke, in both modes
+  var flErr = 0;
+  P.MODES.forEach(function (m) {
+    P.strokesFor(cyc, m).forEach(function (st, i) {
+      var w = P.runningTotals(cyc, m, 4, 0).works[i];
+      flErr = Math.max(flErr, Math.abs(st.dU - (st.Q - w)));
+      if (st.kind === 'adiabat') flErr = Math.max(flErr, Math.abs(w + st.dU));  // W = −ΔU
+      if (st.kind === 'isotherm') flErr = Math.max(flErr, Math.abs(w - st.Q));  // Q = W
+    });
+  });
+  check('first law on every stroke, both modes', flErr, 0, 1e-9, 'J');
 
   var failed = rows.filter(function (r) { return !r.pass; });
   if (typeof console !== 'undefined') {
@@ -610,7 +624,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     S('polygon', { points: (PV.W - PV.R + 22) + ',' + (axY - 10) + ' ' + (PV.W - PV.R + 22) + ',' + (axY + 10) + ' ' + (PV.W - PV.R + 46) + ',' + axY, fill: COLOR.ink }, pvSvg);
     txt(pvSvg, axX - 28, PV.T - 18, 36, { 'font-style': 'italic', 'text-anchor': 'middle' }).textContent = 'p';
     txt(pvSvg, PV.W - PV.R + 30, axY + 50, 36, { 'font-style': 'italic', 'text-anchor': 'middle' }).textContent = 'V';
-    txt(pvSvg, PV.W - PV.R - 10, axY + 50, 22, { 'text-anchor': 'end', fill: '#718096', 'font-style': 'italic' })
+    txt(pvSvg, PV.W - PV.R - 10, axY + 50, 24, { 'text-anchor': 'end', fill: '#718096', 'font-style': 'italic' })
       .textContent = 'schematic, not to scale';
 
     // Enclosed-area shading + "net W" label (state 5)
@@ -894,8 +908,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
       c.children[1].textContent = w === null ? '—' : fmtkJ(w, true);
     }
     var net = cells[4];
-    net.children[0].innerHTML = sub('W = ΣW_k');
-    net.children[1].textContent = step === 5 ? fmtkJ(t.W, true) : '—';
+    // W_k are work done BY the gas in both modes. Engine: net work out W = ΣW_k.
+    // Heat pump: net work in W = −ΣW_k, so the box shows ΣW_k = −W.
+    var sumWk = t.works.reduce(function (a, b) { return a + (b || 0); }, 0);
+    net.children[0].innerHTML = sub(engine ? 'W = ΣW_k' : 'ΣW_k = −W');
+    net.children[1].textContent = step === 5 ? fmtkJ(sumWk, true) : '—';
     net.className = 'wcell net' + (step === 5 ? '' : ' empty');
 
     // Readout

@@ -1,6 +1,6 @@
 # Carnot Cycle Widget — Spec (Lecture Version)
 
-Last updated: 10 Nov 2026
+Last updated: 10 Nov 2026 (revised to match the built widget)
 
 ## Purpose and scope
 
@@ -8,70 +8,117 @@ A single-page, click-through view of the four strokes of the ideal-gas Carnot cy
 
 This is the sparing lecture version. A separate full version (sliders, presets, T–S diagram, Otto and other cycles) will be built later from the same code; see Out of scope.
 
+On-screen text is kept to a minimum: labels are algebraic, and the explanation is given by the lecturer, not the widget.
+
 ## Lecture use
 
 The widget appears in three short visits, each under 3 minutes, between whiteboard work.
 
 1. **Build the cycle (~8–16 min):** step through A→B→C→D after reversibility is introduced, alongside or just after the board derivation of η = 1 − T_C/T_H.
-2. **Run it backwards (~19–25 min):** flip to heat pump mode during Carnot's theorem, and use the COP to resolve the opening "400% efficient" puzzle.
+2. **Run it backwards (~19–25 min):** flip to heat pump mode during Carnot's theorem. The home heat pump's Carnot COP of ≈ 8 resolves the opening "400% efficient" puzzle: a real unit at COP ≈ 4 runs at about half the Carnot limit.
 3. **Close the cycle (~25–30 min):** show the completed ledger (Q_H = W + Q_C); the Q/T ratio is worked on the whiteboard.
 
 ## Layout
 
-One 16:9 screen with four regions, scaled to fill the window; nothing scrolls.
+One 16:9 screen (designed at 1920×1080) with four regions, scaled to fill the window; nothing scrolls.
 
 | Region | Position | Contents |
 | --- | --- | --- |
-| Header | Top strip | Step title (e.g. "A→B: isothermal expansion at T_H"), step counter (1 of 4), mode toggle at right |
-| PV diagram | Left, ~55% width | The four strokes labelled A–D, a moving state dot, axes p and V without numeric ticks |
-| Cylinder | Right, ~45% width | Piston and gas; the block underneath changes: hot reservoir, insulation or cold reservoir; Q and W arrows |
-| Ledger | Bottom strip | Running Q_H, W, Q_C as bars with values, plus a net-work total at the end of the cycle |
+| Header | Top strip | Step title (e.g. "A→B: isothermal expansion at T_H"), a terse note during strokes, step counter ("Stroke 1 of 4"), mode toggle and full-screen icon at right |
+| PV diagram | Left, 50% width | Schematic cycle, A–D labelled, a moving state dot, axes p and V without numeric ticks, legend, "schematic, not to scale" |
+| Cylinder | Right, 50% width | Gas temperature readout, piston and gas, a sliding contact bar underneath, Q and W arrows |
+| Ledger | Bottom strip | Running Q_H and Q_C bars, net work bar at the end, W₁…W₄ record, assumptions line, closing equations |
 
-On narrow screens (under ~700 px, i.e. phones) the PV diagram and cylinder stack vertically.
+On narrow screens (under 700 px wide, i.e. phones in portrait) the regions stack vertically and the page fits one screen height: header and ledger are compacted and the PV diagram and cylinder share the remaining height. A CSS media query decides this, not the JavaScript window width, because phone browsers zoom out to fit a 1920 px stage and then report a misleadingly wide window. Only very short screens (under 560 px visible) fall back to scrolling. Phones in landscape get the scaled 16:9 view.
+
+## PV diagram
+
+A schematic, not to scale, drawn in the conventional textbook shape. The real cycle on linear axes is too thin to read, so the curves are drawn from the same formulas (isotherms pV = const, adiabats pV^γ = const) with exaggerated drawing parameters (T_H/T_C = 2, γ = 2.6, V_B/V_A = 2). The drawing feeds no number.
+
+- Axes p and V, offset to fit the cycle, no ticks; small italic note "schematic, not to scale".
+- Legend: "T_H isotherm (ΔU = 0)", "T_C isotherm (ΔU = 0)", "adiabat (Q = 0)". The isotherms are red and blue, the adiabats dark grey.
+- Corner labels A–D; a midpoint arrowhead on each stroke shows the direction of travel (clockwise for the engine, anticlockwise for the heat pump).
+- Completed strokes are solid, the current one is thick, and future ones are faint.
+- At the end of the cycle the enclosed area is shaded purple and labelled "net W".
+
+## Cylinder
+
+- **Gas temperature** readout at top left ("T = 600 K"), coloured between blue and red; the gas tint follows it.
+- **Piston** height follows the schematic volume, in step with the PV dot.
+- **Contact bar** under the cylinder: one horizontal bar with HOT (left, "HOT T_H = 600 K"), INSULATION (centre, grey hatching) and COLD (right, "COLD T_C = 300 K"). When the contact changes, the bar slides (about 0.6 s) to put the right segment under the cylinder before the stroke starts.
+- **Arrows** appear once the bar has settled, in "word (symbol)" form:
+  - heat through the base: "Heat in (Q_H)", "Heat out (Q_C)", in the reservoir's colour;
+  - work at right, purple: "Work out (W₁)", "Work in (W₃)"; on adiabats the bracket also gives ΔU, e.g. "Work out (W₂ = −ΔU)".
+- No arrows in the overview or at the end of the cycle; the totals live in the ledger.
 
 ## Steps (engine mode)
 
 Six states: an overview, four strokes, and a completed cycle. Labels A–D follow the existing lecture notes.
 
-| State | Stroke | Block under cylinder | Heat | Work | Gas temperature |
-| --- | --- | --- | --- | --- | --- |
-| 0 Overview | Full cycle faint, dot at A | Hot reservoir | — | — | T_H |
-| 1 A→B | Isothermal expansion | Hot reservoir | Q_H in | Out | Stays T_H |
-| 2 B→C | Adiabatic expansion | Insulation | None | Out | Falls T_H → T_C |
-| 3 C→D | Isothermal compression | Cold reservoir | Q_C out | In | Stays T_C |
-| 4 D→A | Adiabatic compression | Insulation | None | In | Rises T_C → T_H |
-| 5 Complete | Enclosed area shaded, labelled "net W" | Hot reservoir | Ledger totals | Net out | T_H |
+| State | Stroke | Under cylinder | Heat | Work | Gas temperature | Header note |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 Overview | Full cycle faint, dot at A | HOT | — | — | T_H | none |
+| 1 A→B | Isothermal expansion | HOT | Heat in (Q_H) | Work out (W₁) | Stays T_H | ΔU = 0, so Q = W |
+| 2 B→C | Adiabatic expansion | INSULATION | None | Work out (W₂ = −ΔU) | Falls T_H → T_C | Q = 0, so W = −ΔU |
+| 3 C→D | Isothermal compression | COLD | Heat out (Q_C) | Work in (W₃) | Stays T_C | ΔU = 0, so Q = W |
+| 4 D→A | Adiabatic compression | INSULATION | None | Work in (W₄ = −ΔU) | Rises T_C → T_H | Q = 0, so W = −ΔU |
+| 5 Complete | Area shaded, "net W" | Unchanged from stroke 4 | — | — | T_H | none |
 
-On entering a stroke, the dot and piston animate together along it (about 1.5 s). Completed strokes stay solid, the current one is thick, and future ones stay faint. The header gives a one-line note per stroke, e.g. "ΔU = 0, so all heat in becomes work out."
+On entering a stroke the bar slides if needed, then the dot and piston animate together along the stroke (about 1.5 s) while the ledger fills in.
+
+On the final Next (stroke 4 → complete) the reservoir does not move. Over about 0.9 s the purple net-W area fades in, the net work bar grows, and the net W value and closing equations fade in. Stepping back, Reset and mode switches always jump without animation.
 
 ## Engine / heat pump toggle
 
-Heat pump mode runs the identical cycle anticlockwise: same curves, same energies, every arrow reversed. That sameness is the teaching point.
+Heat pump mode runs the cycle anticlockwise on the same schematic curves, with every arrow reversed. It uses realistic home temperatures, so its energies are smaller than the engine's.
 
-- **Engine (clockwise):** A→B→C→D. Readout: η = W/Q_H = 1 − T_C/T_H.
-- **Heat pump (anticlockwise):** A→D→C→B. A→D adiabatic expansion cools the gas to T_C; D→C isothermal expansion absorbs Q_C from the cold side; C→B adiabatic compression heats it to T_H; B→A isothermal compression delivers Q_H to the hot side. Readout: COP = Q_H/W = T_H/(T_H − T_C).
-- Switching mode returns to state 0 with the direction arrows already flipped on the faint cycle.
-- The ledger relabels W as "in" and Q_C as "absorbed".
+- **Engine (clockwise):** A→B→C→D between T_H = 600 K and T_C = 300 K. Readout: η = W/Q_H = 1 − T_C/T_H.
+- **Heat pump (anticlockwise):** A→D→C→B for a home air-source heat pump, from 5 °C outdoor air (T_C = 278 K) to 45 °C radiator water (T_H = 318 K). A→D adiabatic expansion cools the gas to T_C; D→C isothermal expansion absorbs Q_C from the cold side; C→B adiabatic compression heats it to T_H; B→A isothermal compression delivers Q_H to the hot side. Readout: COP = Q_H/W = T_H/(T_H − T_C).
+- The overview title is "Carnot heat pump (home)", with the note "Outdoor air 5 °C → radiators 45 °C".
+- Switching mode returns to state 0, with the direction arrows already flipped on the faint cycle and the reservoir labels showing the mode's temperatures.
+- The ledger relabels Q_H as "delivered", Q_C as "absorbed" and the net work as "in".
+- Ledger bars and arrow widths use one energy scale across both modes, so the heat pump's small net work is visibly small next to Q_H.
+
+## Ledger
+
+- **Bars:** "Q_H in" and "Q_C out" fill as the strokes run ("Q_H delivered" / "Q_C absorbed" for the heat pump). "Net work out (W)" ("Net work in (W)") shows "—" until the cycle closes, then grows to its value. Values are in kJ beside the bars.
+- **Work record:** five boxes, W₁ (A→B) … W₄ (D→A) in run order, then the net. W_k is always the work done **by** the gas, in both modes, so ΔU = Q − W everywhere and running the cycle backwards flips each sign.
+  - Engine: W₁…W₄ = +3.46, +3.74, −1.73, −3.74 kJ; net box "W = ΣW_k" = +1.73 kJ.
+  - Heat pump: W₁…W₄ = +0.50, +1.60, −0.50, −1.83 kJ; net box "ΣW_k = −W" = −0.23 kJ, where W = 0.23 kJ is the net work input used in the COP.
+  - The adiabatic works cancel (W₂ + W₄ = 0 for the engine).
+- **Assumptions line**, always shown: "n = 1 mol, γ = 5/3, V_B/V_A = V_C/V_D = 2", generated from the physics inputs (V_C/V_D is computed, not assumed).
+- **At the end of the cycle:** "Q_H = W + Q_C", then "η = W/Q_H = 1 − T_C/T_H = 50%" or "COP = Q_H/W = T_H/(T_H − T_C) = 7.95".
 
 ## Physics model
 
-1 mol of monatomic ideal gas (γ = 5/3) between T_H = 600 K and T_C = 300 K, with V_B/V_A = 2. These give η = 50% and COP = 2, and a cycle wide enough to read when projected.
+1 mol of monatomic ideal gas (γ = 5/3, C_v = 3R/2) with V_B/V_A = 2. Two temperature pairs: the engine runs between T_H = 600 K and T_C = 300 K; the heat pump between T_H = 318 K and T_C = 278 K.
 
-Curves are computed, not sketched: isotherms from pV = nRT, adiabats from pV^γ = const. The adiabats fix the other two corners:
+Isotherms follow pV = nRT and adiabats pV^γ = const. The adiabats fix the other two corners:
 
 ```latex
-\frac{V_C}{V_B} = \frac{V_D}{V_A} = \left(\frac{T_H}{T_C}\right)^{1/(\gamma-1)} = 2^{3/2} \approx 2.83
+\frac{V_C}{V_B} = \frac{V_D}{V_A} = \left(\frac{T_H}{T_C}\right)^{1/(\gamma-1)}
 ```
 
-| Quantity | Value |
-| --- | --- |
-| Volumes V_A, V_B, V_C, V_D (relative) | 1, 2, 5.66, 2.83 |
-| Q_H = nRT_H ln 2 | 3.46 kJ |
-| Q_C = nRT_C ln 2 | 1.73 kJ |
-| W = Q_H − Q_C | 1.73 kJ |
-| Q_H/T_H and Q_C/T_C | 5.76 J/K each |
+Energies: on an isotherm Q = W = nRT ln(V_end/V_start) and ΔU = 0; on an adiabat Q = 0 and W = −ΔU = −nC_v(T_end − T_start). Energies depend only on n, the temperatures, γ and the volume ratio, never on absolute volume or on the drawing.
+
+| Quantity | Engine (600 K / 300 K) | Heat pump (318 K / 278 K) |
+| --- | --- | --- |
+| Volumes V_A, V_B, V_C, V_D (relative) | 1, 2, 5.66, 2.83 | 1, 2, 2.45, 1.22 |
+| Q_H = nRT_H ln 2 | 3.46 kJ | 1.83 kJ |
+| Q_C = nRT_C ln 2 | 1.73 kJ | 1.60 kJ |
+| W = Q_H − Q_C | 1.73 kJ | 0.23 kJ |
+| Adiabatic work nC_v(T_H − T_C) | 3.74 kJ | 0.50 kJ |
+| η = 1 − T_C/T_H | 50% | — |
+| COP = T_H/(T_H − T_C) | 2 | 7.95 |
+| Q_H/T_H and Q_C/T_C | 5.76 J/K each | 5.76 J/K each |
 
 All values are computed in code from T_H, T_C, γ and V_B/V_A, so the full version can expose them as sliders without rework.
+
+A console self-check runs on load (and on demand with `carnotSelfCheck()`). It compares the computed engine values with this table, and checks:
+- the first law on every stroke in both modes;
+- V_C/V_D = V_B/V_A;
+- η and COP against their Carnot formulas;
+- the home heat pump's COP = 318/40 and Q_H = W + Q_C.
 
 ## Controls
 
@@ -85,25 +132,25 @@ Everything works from a presentation clicker, which sends Page Down/Up or arrow 
 | Toggle engine / heat pump | M | Toggle in header |
 | Full screen | F | Icon in header |
 
-Other keys a clicker may send, such as B for a blank screen, are ignored. Stepping back jumps without animation.
+Other keys a clicker may send, such as B for a blank screen, are ignored. Stepping back jumps without animation. A key pressed mid-animation finishes the current step instantly, then acts. Space on a focused button cannot trigger twice.
 
 ## Visual design
 
 Built for a lecture-theatre projector: light background, high contrast, readable from the back row.
 
 - **Type:** labels at least 24 px at 1080p, header 36 px or larger.
-- **Colour:** hot = red, cold = blue, insulation = grey hatching. Every colour also carries a text label ("HOT 600 K"), so nothing depends on colour alone.
-- **Arrows:** Q and W arrow widths are proportional to energy, so Q_H visibly splits into W and Q_C.
+- **Colour:** hot = red, cold = blue, insulation = grey hatching, work = purple. Every colour also carries a text label ("HOT T_H = 600 K"), so nothing depends on colour alone.
+- **Arrows:** Q and W arrow widths are proportional to energy, on one scale across both modes, so Q = W on the isotherms shows as equal widths.
 - **Theme:** light theme fixed regardless of the system's dark mode, because projectors wash out dark themes.
-- **Motion:** respect reduced-motion settings by jumping between states instead of animating.
+- **Motion:** respect reduced-motion settings by jumping between states instead of animating or fading.
 
 ## Build and hosting
 
 One self-contained `index.html`: inline SVG, vanilla JavaScript, no libraries, no CDN, no build step. It must run offline from a double-clicked file.
 
-- **Repo:** `carnot-cycle` containing `index.html`, a `README.md` with a GIF and the key controls, and an MIT `LICENSE`.
-- **Hosting:** GitHub Pages from `main`, root folder. The repo goes public early, so the live page can be tested well before 20 Nov.
-- **Code shape:** a physics module (state points, curve sampling, energies) kept separate from rendering, so the full version reuses it.
+- **Repo:** `carnot-cycle` containing `index.html`, a `README.md` with a GIF (still to record) and the key controls, and an MIT `LICENSE`.
+- **Hosting:** GitHub Pages from `main`, root folder, live at dwaddo.github.io/carnot-cycle. The repo is public, so the live page can be tested well before 20 Nov.
+- **Code shape:** a physics module (state points, curve sampling, energies, no DOM access) kept separate from the self-check and from rendering, so the full version reuses it.
 - **Testing:** full screen on the lecture MacBook in Chrome and Safari at 1920×1080, plus one phone.
 - **Fallback:** a screenshot of each state in the slide deck, in case the browser fails on the day.
 
@@ -121,7 +168,11 @@ These stay on slides or out of the lecture, and move into the later full version
 
 ## Decisions
 
-- **Temperatures:** fixed at 600 K / 300 K; no presets in this version.
-- **Ledger:** values shown in kJ alongside the bars.
+- **Temperatures:** engine fixed at 600 K / 300 K; heat pump fixed at home values, 318 K / 278 K (45 °C radiators, 5 °C outdoor air); no presets in this version.
+- **PV diagram:** schematic and not to scale, algebraic labels only; numbers appear only in the ledger, the gas temperature readout and the reservoir labels.
+- **Sign convention:** W_k is work done by the gas in both modes (ΔU = Q − W). In heat pump mode, W denotes the net work input, so ΣW_k = −W.
+- **Final step:** completing the cycle leaves the reservoir in place and shows no cylinder arrows; only the ledger totals and the net-W shading ease in.
+- **Ledger:** values shown in kJ alongside the bars, with the assumptions (n, γ, volume ratios) stated beside them.
+- **On-screen text:** minimal; explanation is spoken.
 - **Entropy:** no T–S view and no entropy labels; that waits for the full version.
-- **Publishing:** repo goes public early.
+- **Publishing:** repo is public and served from GitHub Pages.
