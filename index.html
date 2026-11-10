@@ -31,8 +31,8 @@
     position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
     transform-origin: 0 0; background: #ffffff;
     display: grid;
-    grid-template-rows: 150px 670px 260px;
-    grid-template-columns: 1056px 864px;
+    grid-template-rows: 130px 690px 260px;
+    grid-template-columns: 960px 960px;
     grid-template-areas: "header header" "pv cyl" "ledger ledger";
   }
 
@@ -41,7 +41,8 @@
     gap: 32px; padding: 0 48px; border-bottom: 2px solid var(--line);
   }
   #title { font-size: 44px; font-weight: 700; line-height: 1.15; }
-  #note  { font-size: 28px; color: var(--muted); margin-top: 8px; line-height: 1.25; }
+  #note  { font-size: 30px; color: var(--muted); margin-top: 8px; line-height: 1.25; }
+  #note:empty { display: none; }
   .hright { display: flex; align-items: center; gap: 24px; flex: none; }
   #counter { font-size: 28px; font-weight: 600; color: var(--muted); min-width: 190px; text-align: right; }
 
@@ -64,12 +65,11 @@
     grid-area: ledger; display: grid; grid-template-columns: 1fr 560px; gap: 40px;
     padding: 16px 48px; border-top: 2px solid var(--line); background: var(--panel);
   }
-  .bars { display: grid; grid-template-columns: 340px 1fr 150px; column-gap: 20px; row-gap: 10px; align-items: center; align-content: center; }
+  .bars { display: grid; grid-template-columns: 240px 1fr 150px; column-gap: 20px; row-gap: 10px; align-items: center; align-content: center; }
   .lab { font-size: 26px; font-weight: 600; white-space: nowrap; }
   .track { position: relative; height: 34px; background: var(--track); border-radius: 4px; overflow: hidden; }
   .bar { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
   .val { font-size: 26px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .pending { font-size: 22px; color: var(--muted); position: absolute; left: 14px; top: 50%; transform: translateY(-50%); white-space: nowrap; }
 
   .works { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr) 1.25fr; gap: 10px; margin-top: 6px; }
   .wcell { background: #ffffff; border: 2px solid var(--line); border-radius: 8px; padding: 4px 12px; }
@@ -82,8 +82,6 @@
   .side { display: flex; flex-direction: column; justify-content: space-between; }
   #readout { font-size: 26px; line-height: 1.3; }
   #readout .eq { font-size: 32px; font-weight: 700; }
-  #readout .hint { color: var(--muted); font-size: 24px; }
-  #readout .conv { color: var(--muted); font-size: 22px; }
   .nav { display: flex; gap: 16px; justify-content: flex-end; }
   .nav button { font-size: 26px; font-weight: 600; padding: 10px 24px; }
 
@@ -106,37 +104,39 @@
     background: #fff5f5; color: #9b2c2c; border-bottom: 2px solid #c53030; font-size: 16px;
   }
 
-  /* Narrow screens (phones): stack vertically, no scaling, allow vertical scroll. */
-  body.narrow { overflow: auto; }
-  body.narrow #stage {
-    position: static; width: 100%; height: auto; transform: none !important;
-    grid-template-rows: auto auto auto auto; grid-template-columns: 100%;
-    grid-template-areas: "header" "pv" "cyl" "ledger";
+  /* Narrow screens (phones): stack vertically, no scaling, normal page scroll.
+     A CSS media query (not JS) decides this, because phone browsers zoom out to
+     fit the 1920px stage and then report a misleadingly wide window. */
+  @media (max-width: 699px) {
+    html, body { height: auto; overflow: visible; }
+    #stage {
+      position: static; width: 100%; height: auto; transform: none !important;
+      grid-template-rows: auto auto auto auto; grid-template-columns: 100%;
+      grid-template-areas: "header" "pv" "cyl" "ledger";
+    }
+    header { flex-direction: column; align-items: stretch; padding: 12px 16px; gap: 10px; }
+    #title { font-size: 22px; }
+    #note { font-size: 15px; }
+    .hright { gap: 10px; justify-content: space-between; }
+    #counter { font-size: 15px; min-width: 0; text-align: left; }
+    .toggle { font-size: 15px; }
+    .toggle span { padding: 6px 12px; }
+    #fsBtn { display: none; }
+    #pv { aspect-ratio: 960 / 690; height: auto; }
+    #cyl { aspect-ratio: 960 / 690; height: auto; border-left: none; border-top: 2px solid var(--line); }
+    #ledger { grid-template-columns: 100%; padding: 12px 16px; gap: 14px; }
+    .bars { grid-template-columns: 120px 1fr 72px; column-gap: 8px; }
+    .lab, .val { font-size: 14px; }
+    .track { height: 20px; }
+    .works { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .wcell .wl { font-size: 12px; }
+    .wcell .wv { font-size: 15px; }
+    #readout { font-size: 15px; }
+    #readout .eq { font-size: 18px; }
+    .side { gap: 12px; }
+    .nav { justify-content: stretch; }
+    .nav button { flex: 1; font-size: 16px; padding: 10px 8px; }
   }
-  body.narrow header { flex-direction: column; align-items: stretch; padding: 12px 16px; gap: 10px; }
-  body.narrow #title { font-size: 22px; }
-  body.narrow #note { font-size: 15px; }
-  body.narrow .hright { gap: 10px; justify-content: space-between; }
-  body.narrow #counter { font-size: 15px; min-width: 0; text-align: left; }
-  body.narrow .toggle { font-size: 15px; }
-  body.narrow .toggle span { padding: 6px 12px; }
-  body.narrow #fsBtn { display: none; }
-  body.narrow #pv { aspect-ratio: 1056 / 670; height: auto; }
-  body.narrow #cyl { aspect-ratio: 864 / 670; height: auto; border-left: none; border-top: 2px solid var(--line); }
-  body.narrow #ledger { grid-template-columns: 100%; padding: 12px 16px; gap: 14px; }
-  body.narrow .bars { grid-template-columns: 120px 1fr 72px; column-gap: 8px; }
-  body.narrow .lab, body.narrow .val { font-size: 14px; }
-  body.narrow .track { height: 20px; }
-  body.narrow .pending { display: none; }
-  body.narrow .works { grid-template-columns: repeat(2, 1fr); gap: 6px; }
-  body.narrow .wcell .wl { font-size: 12px; }
-  body.narrow .wcell .wv { font-size: 15px; }
-  body.narrow #readout { font-size: 15px; }
-  body.narrow #readout .eq { font-size: 18px; }
-  body.narrow #readout .hint, body.narrow #readout .conv { font-size: 13px; }
-  body.narrow .side { gap: 12px; }
-  body.narrow .nav { justify-content: stretch; }
-  body.narrow .nav button { flex: 1; font-size: 16px; padding: 10px 8px; }
 </style>
 </head>
 <body>
@@ -161,8 +161,8 @@
     </div>
   </header>
 
-  <svg id="pv" viewBox="0 0 1056 670" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pressure–volume diagram of the Carnot cycle"></svg>
-  <svg id="cyl" viewBox="0 0 864 670" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cylinder, piston and reservoir"></svg>
+  <svg id="pv" viewBox="0 0 960 690" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pressure–volume diagram of the Carnot cycle"></svg>
+  <svg id="cyl" viewBox="0 0 960 690" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cylinder, piston and reservoir"></svg>
 
   <section id="ledger" aria-label="Energy ledger">
     <div class="bars">
@@ -175,7 +175,7 @@
       <div class="val" id="val-QC"></div>
 
       <div class="lab" id="lab-W"></div>
-      <div class="track"><div class="bar" id="bar-W" style="background: var(--work)"></div><div class="pending" id="pend-W"></div></div>
+      <div class="track"><div class="bar" id="bar-W" style="background: var(--work)"></div></div>
       <div class="val" id="val-W"></div>
 
       <div class="works" id="works"></div>
@@ -434,6 +434,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   // Schematic only: same pV = const / pV^γ = const curves, chosen so the
   // cycle has the familiar textbook shape. Never used for any number.
   var DISPLAY = { TH: 2, TC: 1, gamma: 2.6, rV: 2.0, n: 1 };
+  var SLIDE_MS = 600;    // contact bar slide, before the stroke
   var STROKE_MS = 1500;
 
   var cyc = P.computeCycle(REAL);
@@ -462,35 +463,23 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     return st.from + '→' + st.to + ': ' + kind + ' ' + dir + at;
   }
   function strokeNote(st) {
-    var expand = st.V1 > st.V0;
-    if (st.kind === 'isotherm') {
-      var Q = st.reservoir === 'hot' ? 'Q_H' : 'Q_C', side = st.reservoir === 'hot' ? 'hot' : 'cold';
-      return expand
-        ? 'ΔU = 0, so all heat in becomes work out (' + Q + ' from the ' + side + ' side).'
-        : 'ΔU = 0, so all work in leaves as heat (' + Q + ' to the ' + side + ' side).';
-    }
-    var T0 = st.T0 === TH ? 'T_H' : 'T_C', T1 = st.T1 === TH ? 'T_H' : 'T_C';
-    return expand
-      ? 'Q = 0, so the work out comes from internal energy: T falls from ' + T0 + ' to ' + T1 + '.'
-      : 'Q = 0, so the work in raises internal energy: T rises from ' + T0 + ' to ' + T1 + '.';
+    return st.kind === 'isotherm' ? 'ΔU = 0, so Q = W' : 'Q = 0, so W = −ΔU';
   }
   var OVERVIEW = {
-    engine: { title: 'Carnot engine: four reversible strokes',
-              note: 'Two isotherms and two adiabats. The gas starts at A, in contact with the hot reservoir.' },
-    heatpump: { title: 'Heat pump: the same cycle, run backwards',
-                note: 'Same curves, same energies, every arrow reversed. The gas starts at A.' }
+    engine: { title: 'Carnot engine', note: '' },
+    heatpump: { title: 'Carnot heat pump', note: '' }
   };
   var COMPLETE = {
-    engine: { title: 'Cycle complete: net W = enclosed area',
-              note: 'ΔU = 0 around the cycle, so Q_H = W + Q_C. The adiabats cancel: W_2 + W_4 = 0.' },
-    heatpump: { title: 'Cycle complete: net W in = enclosed area',
-                note: 'ΔU = 0 around the cycle, so Q_H = W + Q_C. The adiabats cancel: W_1 + W_3 = 0.' }
+    engine: { title: 'Cycle complete: net W = enclosed area', note: '' },
+    heatpump: { title: 'Cycle complete: net W in = enclosed area', note: '' }
   };
 
   // ---- State -------------------------------------------------------------
   var mode = 'engine';
   var step = 0;          // 0 overview, 1–4 strokes, 5 complete
   var progress = 1;      // fraction of the current stroke shown
+  var barPos = 0;        // contact bar position: 0 hot, 1 insulation, 2 cold (fractional while sliding)
+  var sliding = false;
   var anim = null;
   var realStrokes, dispStrokes;
 
@@ -553,7 +542,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   // PV diagram (schematic)
   // ======================================================================
   var pvSvg = document.getElementById('pv');
-  var PV = { W: 1056, H: 670, L: 110, R: 60, T: 60, B: 90 };
+  var PV = { W: 960, H: 690, L: 100, R: 90, T: 70, B: 90 };
   var ds = disp.states;
   var Vlo = ds.A.V, Vhi = ds.C.V, plo = ds.C.p, phi = ds.A.p;
   var Vmin = Vlo - 0.12 * (Vhi - Vlo), Vmax = Vhi + 0.1 * (Vhi - Vlo);
@@ -611,8 +600,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     });
 
     // Legend (algebraic labels only)
-    var lg = S('g', {}, pvSvg), lx = 640, ly = 70;
-    [[COLOR.hot, 'T_H isotherm (pV = nRT_H)'], [COLOR.cold, 'T_C isotherm (pV = nRT_C)'], [COLOR.adiabat, 'adiabat (Q = 0, pV^γ = const)']]
+    var lg = S('g', {}, pvSvg), lx = PV.W - 360, ly = 60;
+    [[COLOR.hot, 'T_H isotherm (ΔU = 0)'], [COLOR.cold, 'T_C isotherm (ΔU = 0)'], [COLOR.adiabat, 'adiabat (Q = 0)']]
       .forEach(function (row, i) {
         var y = ly + i * 42;
         S('line', { x1: lx, y1: y - 9, x2: lx + 46, y2: y - 9, stroke: row[0], 'stroke-width': 6, 'stroke-linecap': 'round' }, lg);
@@ -658,7 +647,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   // Cylinder (schematic)
   // ======================================================================
   var cylSvg = document.getElementById('cyl');
-  var CY = { x0: 300, x1: 560, base: 520, maxH: 400, piston: 34, cx: 430 };
+  var CY = { x0: 365, x1: 595, base: 520, maxH: 400, piston: 34, cx: 480 };
+  // Sliding contact bar under the cylinder: segment 0 hot, 1 insulation, 2 cold.
+  var BAR = { y: 532, h: 122, seg: 300 };
   var cyEls = {};
   var Emax = 0;
   cyc.strokes.forEach(function (st) { Emax = Math.max(Emax, Math.abs(st.Q), Math.abs(st.W)); });
@@ -671,15 +662,22 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     S('line', { x1: 0, y1: 0, x2: 0, y2: 18, stroke: '#718096', 'stroke-width': 6 }, pat);
 
     // Gas temperature readout
-    txt(cylSvg, 24, 44, 24, { fill: '#4a5568' }).textContent = 'Gas temperature';
-    cyEls.gasT = txt(cylSvg, 24, 96, 46, { 'font-weight': 700 });
+    cyEls.gasT = txt(cylSvg, 24, 70, 46, { 'font-weight': 700 });
 
-    // Reservoir / insulation block
-    cyEls.block = S('rect', { x: 160, y: 532, width: 540, height: 110, rx: 8 }, cylSvg);
-    cyEls.blockLabBg = S('rect', { x: 172, y: 562, height: 50, rx: 6, fill: '#ffffff' }, cylSvg);
-    cyEls.blockLab = txt(cylSvg, 184, 598, 30, { 'font-weight': 700 });   // insulation label (left)
-    cyEls.resLab1 = txt(cylSvg, 492, 574, 30, { 'font-weight': 700, fill: '#ffffff' }); // reservoir labels sit
-    cyEls.resLab2 = txt(cylSvg, 492, 614, 30, { 'font-weight': 700, fill: '#ffffff' }); // right of the Q arrow
+    // Contact bar: HOT | INSULATION | COLD, slid so the active part is under the cylinder
+    cyEls.bar = S('g', {}, cylSvg);
+    var segs = [
+      { fill: COLOR.hot, label: 'HOT  T_H = ' + fmtK(TH), color: '#ffffff' },
+      { fill: 'url(#hatch)', label: 'INSULATION', color: COLOR.ink },
+      { fill: COLOR.cold, label: 'COLD  T_C = ' + fmtK(TC), color: '#ffffff' }
+    ];
+    segs.forEach(function (sg, i) {
+      var x = i * BAR.seg, cx = x + BAR.seg / 2, ly = BAR.y + BAR.h - 16;
+      S('rect', { x: x, y: BAR.y, width: BAR.seg, height: BAR.h, fill: sg.fill }, cyEls.bar);
+      if (i === 1) S('rect', { x: cx - 105, y: ly - 32, width: 210, height: 44, rx: 6, fill: '#ffffff' }, cyEls.bar);
+      setText(txt(cyEls.bar, cx, ly, 28, { 'font-weight': 700, fill: sg.color, 'text-anchor': 'middle' }), sg.label, 28);
+    });
+    S('rect', { x: 0, y: BAR.y, width: 3 * BAR.seg, height: BAR.h, fill: 'none', stroke: COLOR.ink, 'stroke-width': 3 }, cyEls.bar);
 
     // Gas, piston, rod, walls
     cyEls.gas = S('rect', { x: CY.x0, width: CY.x1 - CY.x0 }, cylSvg);
@@ -690,22 +688,22 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     S('rect', { x: CY.x1, y: wallTop, width: 12, height: CY.base - wallTop + 12, fill: COLOR.ink }, cylSvg);
     S('rect', { x: CY.x0 - 12, y: CY.base, width: CY.x1 - CY.x0 + 24, height: 6, fill: COLOR.ink }, cylSvg);
 
-    // Heat arrow through the base, work arrow at right
+    // Heat arrow through the base (label at left), work arrow at right
     cyEls.qArrow = S('polygon', { 'class': 'arrow' }, cylSvg);
-    cyEls.qLab1 = txt(cylSvg, 586, 466, 30, { 'font-weight': 700 });
-    cyEls.qLab2 = txt(cylSvg, 586, 500, 24, { fill: '#4a5568' });
+    cyEls.qLab = txt(cylSvg, CY.x0 - 30, 470, 30, { 'font-weight': 700, 'text-anchor': 'end' });
+    cyEls.qSym = txt(cylSvg, CY.x0 - 30, 508, 30, { 'font-weight': 700, 'text-anchor': 'end' });
     cyEls.wArrow = S('polygon', { 'class': 'arrow', fill: COLOR.work }, cylSvg);
-    cyEls.wLab1 = txt(cylSvg, 700, 186, 30, { 'font-weight': 700, fill: COLOR.work, 'text-anchor': 'middle' });
-    cyEls.wLab2 = txt(cylSvg, 700, 218, 24, { fill: '#4a5568', 'text-anchor': 'middle' });
+    cyEls.wLab = txt(cylSvg, 760, 140, 30, { 'font-weight': 700, fill: COLOR.work, 'text-anchor': 'middle' });
+    cyEls.wSym = txt(cylSvg, 760, 178, 30, { 'font-weight': 700, fill: COLOR.work, 'text-anchor': 'middle' });
 
-    // State 5 only: Q_C arrow to/from a cold-reservoir tag at left
+    // State 5 only: Q_C arrow to/from a cold tag at right (the cold side of the bar)
     cyEls.coldTag = S('g', {}, cylSvg);
-    S('rect', { x: 20, y: 420, width: 136, height: 94, rx: 8, fill: COLOR.cold }, cyEls.coldTag);
-    txt(cyEls.coldTag, 88, 460, 26, { fill: '#ffffff', 'font-weight': 700, 'text-anchor': 'middle' }).textContent = 'COLD';
-    txt(cyEls.coldTag, 88, 494, 26, { fill: '#ffffff', 'font-weight': 700, 'text-anchor': 'middle' }).textContent = fmtK(TC);
+    S('rect', { x: 800, y: 435, width: 140, height: 90, rx: 8, fill: COLOR.cold }, cyEls.coldTag);
+    txt(cyEls.coldTag, 870, 472, 26, { fill: '#ffffff', 'font-weight': 700, 'text-anchor': 'middle' }).textContent = 'COLD';
+    setText(txt(cyEls.coldTag, 870, 506, 26, { fill: '#ffffff', 'font-weight': 700, 'text-anchor': 'middle' }), 'T_C = ' + fmtK(TC), 26);
     cyEls.qcArrow = S('polygon', { 'class': 'arrow', fill: COLOR.cold }, cylSvg);
-    cyEls.qcLab1 = txt(cylSvg, 224, 364, 30, { 'font-weight': 700, fill: COLOR.cold, 'text-anchor': 'middle' });
-    cyEls.qcLab2 = txt(cylSvg, 224, 396, 24, { fill: '#4a5568', 'text-anchor': 'middle' });
+    cyEls.qcLab = txt(cylSvg, 700, 404, 30, { 'font-weight': 700, fill: COLOR.cold, 'text-anchor': 'middle' });
+    cyEls.qcSym = txt(cylSvg, 700, 440, 30, { 'font-weight': 700, fill: COLOR.cold, 'text-anchor': 'middle' });
   }
 
   function gasTopFor(V) { return CY.base - V / ds.C.V * CY.maxH; }
@@ -780,19 +778,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     setText(cyEls.gasT, 'T = ' + fmtK(T), 46);
     cyEls.gasT.setAttribute('fill', mix(COLOR.cold, COLOR.hot, tFrac(T)));
 
-    var block = cur >= 0 ? (realStrokes[cur].kind === 'adiabat' ? 'insul' : realStrokes[cur].reservoir) : 'hot';
-    cyEls.block.setAttribute('fill', block === 'hot' ? COLOR.hot : block === 'cold' ? COLOR.cold : 'url(#hatch)');
-    cyEls.block.setAttribute('stroke', block === 'insul' ? '#4a5568' : 'none');
-    cyEls.block.setAttribute('stroke-width', 3);
-    var insul = block === 'insul';
-    setText(cyEls.blockLab, insul ? 'INSULATION  (Q = 0)' : '', 30);
-    cyEls.blockLabBg.setAttribute('width', insul ? 330 : 0);
-    setText(cyEls.resLab1, insul ? '' : block === 'hot' ? 'HOT' : 'COLD', 30);
-    setText(cyEls.resLab2, insul ? '' : block === 'hot' ? 'T_H = ' + fmtK(TH) : 'T_C = ' + fmtK(TC), 30);
+    cyEls.bar.setAttribute('transform', 'translate(' + (CY.cx - (barPos * BAR.seg + BAR.seg / 2)).toFixed(1) + ',0)');
 
-    var showQ = false, showW = false, showQc = step === 5;
+    // Arrows appear once the bar has finished sliding into place
+    var showQ = false, showW = false, showQc = step === 5 && !sliding;
     var qInto = true, qE = 0, qRes = 'hot', wOut = true, wE = 0, wName = 'W';
-    if (cur >= 0) {
+    if (sliding) {
+      // contact is changing: no heat or work yet
+    } else if (cur >= 0) {
       var st = realStrokes[cur];
       if (st.kind === 'isotherm') { showQ = true; qE = st.Q; qInto = st.Q > 0; qRes = st.reservoir; }
       showW = true; wE = st.W; wOut = st.W > 0; wName = 'W_' + (cur + 1);
@@ -801,35 +794,35 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
       showW = true; wE = sum.W; wOut = engine; wName = 'W';
     }
 
-    // Q through the base
-    cyEls.qArrow.style.display = showQ ? '' : 'none';
-    [cyEls.qLab1, cyEls.qLab2].forEach(function (e) { e.style.display = showQ ? '' : 'none'; });
+    // Q through the base: "Heat in (Q_H)"
+    [cyEls.qArrow, cyEls.qLab, cyEls.qSym].forEach(function (e) { e.style.display = showQ ? '' : 'none'; });
     if (showQ) {
-      var qy0 = 622, qy1 = Math.max(470, top + 30);
+      var qy0 = 590, qy1 = Math.max(470, top + 30);
       cyEls.qArrow.setAttribute('points', qInto ? arrowPoints(CY.cx, qy0, CY.cx, qy1, widthFor(qE))
                                                 : arrowPoints(CY.cx, qy1, CY.cx, qy0, widthFor(qE)));
       cyEls.qArrow.setAttribute('fill', COLOR[qRes]);
-      setText(cyEls.qLab1, qRes === 'hot' ? 'Q_H' : 'Q_C', 30);
-      cyEls.qLab1.setAttribute('fill', COLOR[qRes]);
-      cyEls.qLab2.textContent = qInto ? 'heat in' : 'heat out';
+      setText(cyEls.qLab, qInto ? 'Heat in' : 'Heat out', 30);
+      setText(cyEls.qSym, qRes === 'hot' ? '(Q_H)' : '(Q_C)', 30);
+      cyEls.qLab.setAttribute('fill', COLOR[qRes]);
+      cyEls.qSym.setAttribute('fill', COLOR[qRes]);
     }
-    // W at right
-    cyEls.wArrow.style.display = showW ? '' : 'none';
-    [cyEls.wLab1, cyEls.wLab2].forEach(function (e) { e.style.display = showW ? '' : 'none'; });
+    // W at right: "Work out (W_1)", adiabats "Work out (W_2 = −ΔU)", end "Net work out (W)"
+    [cyEls.wArrow, cyEls.wLab, cyEls.wSym].forEach(function (e) { e.style.display = showW ? '' : 'none'; });
     if (showW) {
-      cyEls.wArrow.setAttribute('points', wOut ? arrowPoints(700, 400, 700, 240, widthFor(wE))
-                                               : arrowPoints(700, 240, 700, 400, widthFor(wE)));
-      setText(cyEls.wLab1, wName, 30);
-      cyEls.wLab2.textContent = (step === 5 ? 'net ' : '') + (wOut ? 'work out' : 'work in');
+      cyEls.wArrow.setAttribute('points', wOut ? arrowPoints(760, 360, 760, 200, widthFor(wE))
+                                               : arrowPoints(760, 200, 760, 360, widthFor(wE)));
+      var adiabat = cur >= 0 && realStrokes[cur].kind === 'adiabat';
+      setText(cyEls.wLab, (step === 5 ? 'Net work ' : 'Work ') + (wOut ? 'out' : 'in'), 30);
+      setText(cyEls.wSym, '(' + wName + (adiabat ? ' = −ΔU' : '') + ')', 30);
     }
     // Q_C (state 5)
-    [cyEls.coldTag, cyEls.qcArrow, cyEls.qcLab1, cyEls.qcLab2].forEach(function (e) { e.style.display = showQc ? '' : 'none'; });
+    [cyEls.coldTag, cyEls.qcArrow, cyEls.qcLab, cyEls.qcSym].forEach(function (e) { e.style.display = showQc ? '' : 'none'; });
     if (showQc) {
-      var y = 472;
-      cyEls.qcArrow.setAttribute('points', engine ? arrowPoints(CY.x0 - 16, y, 160, y, widthFor(sum.QC))
-                                                  : arrowPoints(160, y, CY.x0 - 16, y, widthFor(sum.QC)));
-      setText(cyEls.qcLab1, 'Q_C', 30);
-      cyEls.qcLab2.textContent = engine ? 'heat out' : 'heat in';
+      var y = 480;
+      cyEls.qcArrow.setAttribute('points', engine ? arrowPoints(CY.x1 + 16, y, 790, y, widthFor(sum.QC))
+                                                  : arrowPoints(790, y, CY.x1 + 16, y, widthFor(sum.QC)));
+      setText(cyEls.qcLab, engine ? 'Heat out' : 'Heat in', 30);
+      setText(cyEls.qcSym, '(Q_C)', 30);
     }
 
     renderLedger(cur, s);
@@ -840,9 +833,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     var nDone = step === 5 ? 4 : cur >= 0 ? cur : 0;
     var t = P.runningTotals(cyc, mode, nDone, cur >= 0 ? s : 0);
 
-    $('lab-QH').innerHTML = sub(engine ? 'Q_H in (from hot)' : 'Q_H delivered (to hot)');
-    $('lab-QC').innerHTML = sub(engine ? 'Q_C out (to cold)' : 'Q_C absorbed (from cold)');
-    $('lab-W').innerHTML = engine ? 'W out (net)' : 'W in (net)';
+    $('lab-QH').innerHTML = sub(engine ? 'Q_H in' : 'Q_H delivered');
+    $('lab-QC').innerHTML = sub(engine ? 'Q_C out' : 'Q_C absorbed');
+    $('lab-W').innerHTML = engine ? 'W out' : 'W in';
     function bar(id, v) {
       $('bar-' + id).style.width = (Math.max(0, v) / LEDGER_MAX * 100).toFixed(2) + '%';
       $('val-' + id).textContent = fmtkJ(v);
@@ -851,11 +844,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     bar('QC', t.QC);
     if (step === 5) {
       bar('W', t.W);
-      $('pend-W').textContent = '';
     } else {
       $('bar-W').style.width = '0%';
       $('val-W').textContent = '—';
-      $('pend-W').innerHTML = sub('net W = W_1 + W_2 + W_3 + W_4, shown when the cycle closes');
     }
 
     // Per-stroke work record W_1..W_4 and the net W
@@ -867,7 +858,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
       c.children[1].textContent = w === null ? '—' : fmtkJ(w, true);
     }
     var net = cells[4];
-    net.children[0].innerHTML = sub(engine ? 'W = ΣW_k  (+ = by gas)' : 'W = ΣW_k  (+ = on gas)');
+    net.children[0].innerHTML = sub('W = ΣW_k');
     net.children[1].textContent = step === 5 ? fmtkJ(t.W, true) : '—';
     net.className = 'wcell net' + (step === 5 ? '' : ' empty');
 
@@ -881,10 +872,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
           ? sub('η = W/Q_H = 1 − T_C/T_H = ' + fmtNum(sum.etaCarnot * 100) + '%')
           : sub('COP = Q_H/W = T_H/(T_H − T_C) = ' + fmtNum(sum.COPCarnot))) + '</div>';
     } else {
-      r.innerHTML =
-        '<div class="conv">' + sub(engine ? 'W_k: work done by the gas on each stroke (+ = out)'
-                                          : 'W_k: work done on the gas on each stroke (+ = in)') + '</div>' +
-        '<div class="hint">' + (engine ? 'η' : 'COP') + ' appears when the cycle closes.</div>';
+      r.innerHTML = '';
     }
   }
 
@@ -893,53 +881,70 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   // ======================================================================
   function ease(u) { return u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; }
 
-  function startStrokeAnimation() {
-    if (reducedMotion()) { progress = 1; render(); return; }
-    progress = 0;
-    render();
+  /** Which bar segment sits under the cylinder: 0 hot, 1 insulation, 2 cold. */
+  function barIndexFor(st) {
+    if (st < 1 || st > 4) return 0;
+    var s = realStrokes[st - 1];
+    return s.kind === 'adiabat' ? 1 : s.reservoir === 'hot' ? 0 : 2;
+  }
+
+  /** Go forward to newStep: slide the bar if the contact changes, then run the stroke. */
+  function animateTo(newStep) {
+    var from = barPos, to = barIndexFor(newStep), isStroke = newStep >= 1 && newStep <= 4;
+    step = newStep;
+    var slideMs = from !== to ? SLIDE_MS : 0, strokeMs = isStroke ? STROKE_MS : 0;
+    if (reducedMotion() || slideMs + strokeMs === 0) {
+      barPos = to; sliding = false; progress = 1; render(); return;
+    }
+    progress = isStroke ? 0 : 1;
     var t0 = null;
     anim = { raf: 0 };
     function tick(now) {
       if (!anim) return;
       if (t0 === null) t0 = now;
-      var u = Math.min(1, (now - t0) / STROKE_MS);
-      progress = ease(u);
+      var t = now - t0;
+      if (t < slideMs) {
+        sliding = true;
+        barPos = from + (to - from) * ease(t / slideMs);
+      } else {
+        sliding = false;
+        barPos = to;
+        if (strokeMs) progress = ease(Math.min(1, (t - slideMs) / strokeMs));
+      }
       render();
-      if (u < 1) anim.raf = requestAnimationFrame(tick); else anim = null;
+      if (t < slideMs + strokeMs) anim.raf = requestAnimationFrame(tick); else anim = null;
     }
+    render();
     anim.raf = requestAnimationFrame(tick);
   }
   function finishAnimation() {
     if (!anim) return;
     cancelAnimationFrame(anim.raf);
     anim = null;
-    progress = 1;
+    jumpTo(step);
+  }
+  /** Show a state in its finished form, without animation. */
+  function jumpTo(newStep) {
+    step = newStep; progress = 1; sliding = false; barPos = barIndexFor(step);
     render();
   }
 
   function next() {
     finishAnimation();
-    if (step >= 5) return;
-    step++;
-    if (step <= 4) startStrokeAnimation(); else { progress = 1; render(); }
+    if (step < 5) animateTo(step + 1);
   }
   function prev() {
     finishAnimation();
-    if (step <= 0) return;
-    step--;
-    progress = 1; // stepping back jumps without animation
-    render();
+    if (step > 0) jumpTo(step - 1); // stepping back jumps without animation
   }
   function reset() {
     finishAnimation();
-    step = 0; progress = 1;
-    render();
+    jumpTo(0);
   }
   function toggleMode() {
     finishAnimation();
     setMode(mode === 'engine' ? 'heatpump' : 'engine');
-    step = 0; progress = 1;
-    render();
+    jumpTo(0);
   }
 
   var root = document.documentElement;
@@ -981,11 +986,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
 
   // ---- Fit the 16:9 stage to the window ------------------------------------
   var stage = $('stage');
+  var narrowMQ = window.matchMedia ? window.matchMedia('(max-width: 699px)') : null;
   function fit() {
     var w = window.innerWidth, h = window.innerHeight;
-    var narrow = w < 700;
-    document.body.classList.toggle('narrow', narrow);
-    if (narrow) { stage.style.transform = ''; return; }
+    if (narrowMQ && narrowMQ.matches) { stage.style.transform = ''; return; } // CSS handles phones
     var sc = Math.min(w / 1920, h / 1080);
     stage.style.transform = 'translate(' + ((w - 1920 * sc) / 2).toFixed(1) + 'px,' + ((h - 1080 * sc) / 2).toFixed(1) + 'px) scale(' + sc + ')';
   }
