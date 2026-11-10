@@ -65,7 +65,7 @@
     grid-area: ledger; display: grid; grid-template-columns: 1fr 560px; gap: 40px;
     padding: 16px 48px; border-top: 2px solid var(--line); background: var(--panel);
   }
-  .bars { display: grid; grid-template-columns: 240px 1fr 150px; column-gap: 20px; row-gap: 10px; align-items: center; align-content: center; }
+  .bars { display: grid; grid-template-columns: 250px 1fr 150px; column-gap: 20px; row-gap: 10px; align-items: center; align-content: center; }
   .lab { font-size: 26px; font-weight: 600; white-space: nowrap; }
   .track { position: relative; height: 34px; background: var(--track); border-radius: 4px; overflow: hidden; }
   .bar { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
@@ -82,6 +82,7 @@
   .side { display: flex; flex-direction: column; justify-content: space-between; }
   #readout { font-size: 26px; line-height: 1.3; }
   #readout .eq { font-size: 32px; font-weight: 700; }
+  #readout .given { font-size: 24px; color: var(--muted); margin-bottom: 4px; }
   .nav { display: flex; gap: 16px; justify-content: flex-end; }
   .nav button { font-size: 26px; font-weight: 600; padding: 10px 24px; }
 
@@ -90,13 +91,22 @@
   .stk.future { opacity: 0.3; }
   .stk.done .line { stroke-width: 5; }
   .stk.current .line { stroke-width: 10; }
-  #shade { opacity: 0; transition: opacity 0.5s; }
+  #shade { opacity: 0; }
   #shade.show { opacity: 1; }
   .svgtxt { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
   .arrow { stroke: #ffffff; stroke-width: 3; stroke-linejoin: round; }
 
+  /* Easing for forward steps only (#stage.fwd); stepping back, reset and mode
+     switches drop the class, so they jump. */
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  #stage.fwd #shade { transition: opacity 0.9s ease; }
+  #stage.fwd .stk .line { transition: stroke-width 0.5s ease; }
+  #stage.fwd #bar-W { transition: width 0.9s ease; }
+  #stage.fwd.complete #readout .eq, #stage.fwd.complete .wcell.net .wv, #stage.fwd.complete #val-W { animation: fadein 0.9s ease both; }
+
   @media (prefers-reduced-motion: reduce) {
-    #shade { transition: none; }
+    #stage.fwd #shade, #stage.fwd .stk .line, #stage.fwd #bar-W { transition: none; }
+    #stage.fwd.complete #readout .eq, #stage.fwd.complete .wcell.net .wv, #stage.fwd.complete #val-W { animation: none; }
   }
 
   #err {
@@ -127,16 +137,16 @@
     #pv, #cyl { flex: 1 1 0; min-height: 0; height: auto; width: 100%; }
     #cyl { border-left: none; border-top: 1px solid var(--line); }
     #ledger { flex: none; grid-template-columns: 100%; padding: 6px 12px 8px; gap: 6px; }
-    .bars { grid-template-columns: 96px 1fr 62px; column-gap: 6px; row-gap: 3px; }
+    .bars { grid-template-columns: 116px 1fr 62px; column-gap: 6px; row-gap: 3px; }
     .lab, .val { font-size: 13px; }
     .track { height: 12px; }
     .works { grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 3px; }
     .wcell { padding: 1px 3px; border-width: 1px; border-radius: 4px; }
     .wcell .wl { font-size: 9px; }
     .wcell .wv { font-size: 11px; }
-    #readout { font-size: 13px; min-height: 34px; line-height: 1.3; }
+    #readout { font-size: 13px; min-height: 52px; line-height: 1.3; }
     #readout .eq { font-size: 14px; }
-    #readout .nums { display: none; }
+    #readout .given { font-size: 12px; margin-bottom: 1px; }
     .side { gap: 6px; }
     .nav { justify-content: stretch; gap: 8px; }
     .nav button { flex: 1; font-size: 15px; padding: 6px 6px; border-width: 1.5px; border-radius: 8px; }
@@ -385,6 +395,7 @@ function carnotSelfCheck() {
   check('eta − (1 − T_C/T_H)', s.eta - s.etaCarnot, 0, 1e-12);
   check('COP − T_H/(T_H − T_C)', s.COP - s.COPCarnot, 0, 1e-12);
   check('ΣΔU around cycle', s.sumDU, 0, 1e-9, 'J');
+  check('V_C/V_D − V_B/V_A', cyc.states.C.V / cyc.states.D.V - cyc.states.B.V / cyc.states.A.V, 0, 1e-12);
   check('W_2 + W_4 (adiabats cancel)', cyc.strokes[1].W + cyc.strokes[3].W, 0, 1e-9, 'J');
   var cornerErr = 0;
   cyc.strokes.forEach(function (st) {
@@ -398,6 +409,11 @@ function carnotSelfCheck() {
   check('heat pump Q_H delivered', kJ(hp.QH), 3.46, R2, 'kJ');
   check('heat pump Q_C absorbed', kJ(hp.QC), 1.73, R2, 'kJ');
   check('heat pump W in', kJ(hp.W), 1.73, R2, 'kJ');
+  // Home heat pump used in heat pump mode (318 K radiators, 278 K outdoor air)
+  var home = P.computeCycle({ TH: 318, TC: 278, gamma: 5 / 3, rV: 2 });
+  var homeHP = P.runningTotals(home, 'heatpump', 4, 0);
+  check('home heat pump COP = Q_H/W', homeHP.QH / homeHP.W, 318 / 40, 1e-9);
+  check('home heat pump Q_H = W + Q_C', homeHP.QH - homeHP.W - homeHP.QC, 0, 1e-9, 'J');
   var en = P.runningTotals(cyc, 'engine', 4, 0);
   check('engine ledger W = ΣW_k', en.W - en.works.reduce(function (a, b) { return a + b; }, 0), 0, 1e-9, 'J');
 
@@ -434,22 +450,34 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   var P = CarnotPhysics;
 
   // ---- Configuration -----------------------------------------------------
-  var REAL = { TH: 600, TC: 300, gamma: 5 / 3, rV: 2, n: 1 };
+  // Real cycles behind every number. Engine: the spec's 600 K / 300 K.
+  // Heat pump: a home air-source heat pump, 5 °C outdoor air (278 K) to
+  // 45 °C radiator water (318 K).
+  var REAL = {
+    engine:   { TH: 600, TC: 300, gamma: 5 / 3, rV: 2, n: 1 },
+    heatpump: { TH: 318, TC: 278, gamma: 5 / 3, rV: 2, n: 1 }
+  };
+  var CELSIUS = 273.15;
   // Schematic only: same pV = const / pV^γ = const curves, chosen so the
   // cycle has the familiar textbook shape. Never used for any number.
   var DISPLAY = { TH: 2, TC: 1, gamma: 2.6, rV: 2.0, n: 1 };
   var SLIDE_MS = 600;    // contact bar slide, before the stroke
   var STROKE_MS = 1500;
 
-  var cyc = P.computeCycle(REAL);
+  var cycles = { engine: P.computeCycle(REAL.engine), heatpump: P.computeCycle(REAL.heatpump) };
   var disp = P.computeCycle(DISPLAY);
-  var sum = P.summary(cyc);
-  var TH = cyc.params.TH, TC = cyc.params.TC;
+  // The current mode's cycle; reassigned in setMode().
+  var cyc, sum, TH, TC;
+  function useCycle(m) {
+    cyc = cycles[m]; sum = P.summary(cyc); TH = cyc.params.TH; TC = cyc.params.TC;
+  }
+  useCycle('engine');
 
   var COLOR = { hot: '#c53030', cold: '#2b6cb0', adiabat: '#4a5568', work: '#6b46c1', ink: '#1a202c' };
 
   // ---- Formatting --------------------------------------------------------
   function fmtK(T) { return Math.round(T) + ' K'; }
+  function fmtC(T) { return Math.round(T - CELSIUS) + ' °C'; }
   function fmtkJ(J, signed) {
     var v = J / 1000, a = Math.abs(v);
     if (a < 0.005) return '0.00 kJ';
@@ -457,7 +485,22 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     return sign + a.toFixed(2) + ' kJ';
   }
   function fmtNum(x) { return String(+x.toFixed(2)); }
-  function sub(s) { return s.replace(/([A-Za-z])_([HC1-4k])/g, '$1<sub>$2</sub>'); } // HTML subscripts
+  function sub(s) { return s.replace(/([A-Za-z])_([A-DH1-4k])/g, '$1<sub>$2</sub>'); } // HTML subscripts
+
+  /** 5/3 rather than 1.67 for simple fractions. */
+  function fracStr(x) {
+    for (var d = 1; d <= 8; d++) {
+      var k = Math.round(x * d);
+      if (Math.abs(k / d - x) < 1e-9) return d === 1 ? String(k) : k + '/' + d;
+    }
+    return fmtNum(x);
+  }
+  /** The inputs behind every kJ value in the current mode (V_C/V_D is computed, not assumed). */
+  function givenLine() {
+    var rAB = fmtNum(cyc.states.B.V / cyc.states.A.V), rDC = fmtNum(cyc.states.C.V / cyc.states.D.V);
+    return sub('n = ' + fmtNum(cyc.params.n) + ' mol, γ = ' + fracStr(cyc.params.gamma) + ', ' +
+      (rAB === rDC ? 'V_B/V_A = V_C/V_D = ' + rAB : 'V_B/V_A = ' + rAB + ', V_C/V_D = ' + rDC));
+  }
 
   // ---- Text for each state -----------------------------------------------
   function strokeTitle(st) {
@@ -471,7 +514,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   }
   var OVERVIEW = {
     engine: { title: 'Carnot engine', note: '' },
-    heatpump: { title: 'Carnot heat pump', note: '' }
+    heatpump: { title: 'Carnot heat pump (home)',
+                note: 'Outdoor air ' + fmtC(REAL.heatpump.TC) + ' → radiators ' + fmtC(REAL.heatpump.TH) }
   };
   var COMPLETE = {
     engine: { title: 'Cycle complete: net W = enclosed area', note: '' },
@@ -655,8 +699,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   // Sliding contact bar under the cylinder: segment 0 hot, 1 insulation, 2 cold.
   var BAR = { y: 532, h: 122, seg: 300 };
   var cyEls = {};
+  // One scale for both modes, so the heat pump's smaller energies look smaller.
   var Emax = 0;
-  cyc.strokes.forEach(function (st) { Emax = Math.max(Emax, Math.abs(st.Q), Math.abs(st.W)); });
+  P.MODES.forEach(function (m) {
+    cycles[m].strokes.forEach(function (st) { Emax = Math.max(Emax, Math.abs(st.Q), Math.abs(st.W)); });
+  });
   function widthFor(E) { return Math.abs(E) / Emax * 58; } // arrow width ∝ energy
 
   function buildCyl() {
@@ -671,15 +718,17 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     // Contact bar: HOT | INSULATION | COLD, slid so the active part is under the cylinder
     cyEls.bar = S('g', {}, cylSvg);
     var segs = [
-      { fill: COLOR.hot, label: 'HOT  T_H = ' + fmtK(TH), color: '#ffffff' },
+      { fill: COLOR.hot, color: '#ffffff' },
       { fill: 'url(#hatch)', label: 'INSULATION', color: COLOR.ink },
-      { fill: COLOR.cold, label: 'COLD  T_C = ' + fmtK(TC), color: '#ffffff' }
+      { fill: COLOR.cold, color: '#ffffff' }
     ];
+    cyEls.segLab = [];
     segs.forEach(function (sg, i) {
       var x = i * BAR.seg, cx = x + BAR.seg / 2, ly = BAR.y + BAR.h - 16;
       S('rect', { x: x, y: BAR.y, width: BAR.seg, height: BAR.h, fill: sg.fill }, cyEls.bar);
       if (i === 1) S('rect', { x: cx - 105, y: ly - 32, width: 210, height: 44, rx: 6, fill: '#ffffff' }, cyEls.bar);
-      setText(txt(cyEls.bar, cx, ly, 28, { 'font-weight': 700, fill: sg.color, 'text-anchor': 'middle' }), sg.label, 28);
+      cyEls.segLab[i] = txt(cyEls.bar, cx, ly, 28, { 'font-weight': 700, fill: sg.color, 'text-anchor': 'middle' });
+      if (sg.label) setText(cyEls.segLab[i], sg.label, 28);
     });
     S('rect', { x: 0, y: BAR.y, width: 3 * BAR.seg, height: BAR.h, fill: 'none', stroke: COLOR.ink, 'stroke-width': 3 }, cyEls.bar);
 
@@ -699,15 +748,6 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     cyEls.wArrow = S('polygon', { 'class': 'arrow', fill: COLOR.work }, cylSvg);
     cyEls.wLab = txt(cylSvg, 760, 140, 30, { 'font-weight': 700, fill: COLOR.work, 'text-anchor': 'middle' });
     cyEls.wSym = txt(cylSvg, 760, 178, 30, { 'font-weight': 700, fill: COLOR.work, 'text-anchor': 'middle' });
-
-    // State 5 only: Q_C arrow to/from a cold tag at right (the cold side of the bar)
-    cyEls.coldTag = S('g', {}, cylSvg);
-    S('rect', { x: 800, y: 435, width: 140, height: 90, rx: 8, fill: COLOR.cold }, cyEls.coldTag);
-    txt(cyEls.coldTag, 870, 472, 26, { fill: '#ffffff', 'font-weight': 700, 'text-anchor': 'middle' }).textContent = 'COLD';
-    setText(txt(cyEls.coldTag, 870, 506, 26, { fill: '#ffffff', 'font-weight': 700, 'text-anchor': 'middle' }), 'T_C = ' + fmtK(TC), 26);
-    cyEls.qcArrow = S('polygon', { 'class': 'arrow', fill: COLOR.cold }, cylSvg);
-    cyEls.qcLab = txt(cylSvg, 700, 404, 30, { 'font-weight': 700, fill: COLOR.cold, 'text-anchor': 'middle' });
-    cyEls.qcSym = txt(cylSvg, 700, 440, 30, { 'font-weight': 700, fill: COLOR.cold, 'text-anchor': 'middle' });
   }
 
   function gasTopFor(V) { return CY.base - V / ds.C.V * CY.maxH; }
@@ -716,7 +756,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   // Ledger
   // ======================================================================
   var $ = function (id) { return document.getElementById(id); };
-  var LEDGER_MAX = sum.QH; // all bars share one scale
+  // All bars, in both modes, share one scale
+  var LEDGER_MAX = Math.max(P.summary(cycles.engine).QH, P.summary(cycles.heatpump).QH);
 
   function buildWorks() {
     var box = $('works');
@@ -734,6 +775,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   // ======================================================================
   function setMode(m) {
     mode = m;
+    useCycle(m);
+    setText(cyEls.segLab[0], 'HOT  T_H = ' + fmtK(TH), 28);
+    setText(cyEls.segLab[2], 'COLD  T_C = ' + fmtK(TC), 28);
     realStrokes = P.strokesFor(cyc, mode);
     dispStrokes = P.strokesFor(disp, mode);
     placeArrowheads();
@@ -755,6 +799,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     $('title').innerHTML = sub(text.title);
     $('note').innerHTML = sub(text.note);
     $('counter').textContent = step === 0 ? 'Overview' : step === 5 ? 'Complete' : 'Stroke ' + step + ' of 4';
+    stage.classList.toggle('complete', step === 5);
 
     // PV strokes
     dispStrokes.forEach(function (st, i) {
@@ -784,18 +829,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
 
     cyEls.bar.setAttribute('transform', 'translate(' + (CY.cx - (barPos * BAR.seg + BAR.seg / 2)).toFixed(1) + ',0)');
 
-    // Arrows appear once the bar has finished sliding into place
-    var showQ = false, showW = false, showQc = step === 5 && !sliding;
+    // Arrows only during a stroke, once the bar has finished sliding into place.
+    // The overview and the completed cycle show no arrows: the totals live in the ledger.
+    var showQ = false, showW = false;
     var qInto = true, qE = 0, qRes = 'hot', wOut = true, wE = 0, wName = 'W';
-    if (sliding) {
-      // contact is changing: no heat or work yet
-    } else if (cur >= 0) {
+    if (cur >= 0 && !sliding) {
       var st = realStrokes[cur];
       if (st.kind === 'isotherm') { showQ = true; qE = st.Q; qInto = st.Q > 0; qRes = st.reservoir; }
       showW = true; wE = st.W; wOut = st.W > 0; wName = 'W_' + (cur + 1);
-    } else if (step === 5) {
-      showQ = true; qE = sum.QH; qInto = engine; qRes = 'hot';
-      showW = true; wE = sum.W; wOut = engine; wName = 'W';
     }
 
     // Q through the base: "Heat in (Q_H)"
@@ -810,23 +851,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
       cyEls.qLab.setAttribute('fill', COLOR[qRes]);
       cyEls.qSym.setAttribute('fill', COLOR[qRes]);
     }
-    // W at right: "Work out (W_1)", adiabats "Work out (W_2 = −ΔU)", end "Net work out (W)"
+    // W at right: "Work out (W_1)", adiabats "Work out (W_2 = −ΔU)"
     [cyEls.wArrow, cyEls.wLab, cyEls.wSym].forEach(function (e) { e.style.display = showW ? '' : 'none'; });
     if (showW) {
       cyEls.wArrow.setAttribute('points', wOut ? arrowPoints(760, 360, 760, 200, widthFor(wE))
                                                : arrowPoints(760, 200, 760, 360, widthFor(wE)));
-      var adiabat = cur >= 0 && realStrokes[cur].kind === 'adiabat';
-      setText(cyEls.wLab, (step === 5 ? 'Net work ' : 'Work ') + (wOut ? 'out' : 'in'), 30);
+      var adiabat = realStrokes[cur].kind === 'adiabat';
+      setText(cyEls.wLab, 'Work ' + (wOut ? 'out' : 'in'), 30);
       setText(cyEls.wSym, '(' + wName + (adiabat ? ' = −ΔU' : '') + ')', 30);
-    }
-    // Q_C (state 5)
-    [cyEls.coldTag, cyEls.qcArrow, cyEls.qcLab, cyEls.qcSym].forEach(function (e) { e.style.display = showQc ? '' : 'none'; });
-    if (showQc) {
-      var y = 480;
-      cyEls.qcArrow.setAttribute('points', engine ? arrowPoints(CY.x1 + 16, y, 790, y, widthFor(sum.QC))
-                                                  : arrowPoints(790, y, CY.x1 + 16, y, widthFor(sum.QC)));
-      setText(cyEls.qcLab, engine ? 'Heat out' : 'Heat in', 30);
-      setText(cyEls.qcSym, '(Q_C)', 30);
     }
 
     renderLedger(cur, s);
@@ -839,7 +871,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
 
     $('lab-QH').innerHTML = sub(engine ? 'Q_H in' : 'Q_H delivered');
     $('lab-QC').innerHTML = sub(engine ? 'Q_C out' : 'Q_C absorbed');
-    $('lab-W').innerHTML = engine ? 'W out' : 'W in';
+    $('lab-W').innerHTML = engine ? 'Net work out (W)' : 'Net work in (W)';
     function bar(id, v) {
       $('bar-' + id).style.width = (Math.max(0, v) / LEDGER_MAX * 100).toFixed(2) + '%';
       $('val-' + id).textContent = fmtkJ(v);
@@ -868,15 +900,15 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
 
     // Readout
     var r = $('readout');
+    var given = '<div class="given">' + givenLine() + '</div>';
     if (step === 5) {
-      r.innerHTML =
+      r.innerHTML = given +
         '<div class="eq">' + sub('Q_H = W + Q_C') + '</div>' +
-        '<div class="nums">' + fmtkJ(sum.QH) + ' = ' + fmtkJ(sum.W) + ' + ' + fmtkJ(sum.QC) + '</div>' +
         '<div class="eq">' + (engine
           ? sub('η = W/Q_H = 1 − T_C/T_H = ' + fmtNum(sum.etaCarnot * 100) + '%')
           : sub('COP = Q_H/W = T_H/(T_H − T_C) = ' + fmtNum(sum.COPCarnot))) + '</div>';
     } else {
-      r.innerHTML = '';
+      r.innerHTML = given;
     }
   }
 
@@ -887,6 +919,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
 
   /** Which bar segment sits under the cylinder: 0 hot, 1 insulation, 2 cold. */
   function barIndexFor(st) {
+    if (st === 5) return barIndexFor(4); // completing the cycle leaves the contact as it was
     if (st < 1 || st > 4) return 0;
     var s = realStrokes[st - 1];
     return s.kind === 'adiabat' ? 1 : s.reservoir === 'hot' ? 0 : 2;
@@ -896,6 +929,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   function animateTo(newStep) {
     var from = barPos, to = barIndexFor(newStep), isStroke = newStep >= 1 && newStep <= 4;
     step = newStep;
+    stage.classList.add('fwd'); // enables the CSS easing (fades, W bar growth)
     var slideMs = from !== to ? SLIDE_MS : 0, strokeMs = isStroke ? STROKE_MS : 0;
     if (reducedMotion() || slideMs + strokeMs === 0) {
       barPos = to; sliding = false; progress = 1; render(); return;
@@ -929,6 +963,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
   }
   /** Show a state in its finished form, without animation. */
   function jumpTo(newStep) {
+    stage.classList.remove('fwd');
     step = newStep; progress = 1; sliding = false; barPos = barIndexFor(step);
     render();
   }
