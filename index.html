@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Carnot Cycle</title>
+<style>
+  /* Fixed light theme: projectors wash out dark themes, so no dark-mode rules. */
+  :root {
+    color-scheme: light;
+    --hot: #c53030;
+    --cold: #2b6cb0;
+    --adiabat: #4a5568;
+    --work: #6b46c1;
+    --ink: #1a202c;
+    --muted: #4a5568;
+    --line: #cbd5e0;
+    --panel: #f4f6f9;
+    --track: #e2e8f0;
+  }
+  html, body {
+    margin: 0; height: 100%; background: #ffffff; color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+  sub { font-size: 0.7em; line-height: 0; }
+
+  /* 1920x1080 stage, scaled by JS to fit the window (letterboxed). */
+  #stage {
+    position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
+    transform-origin: 0 0; background: #ffffff;
+    display: grid;
+    grid-template-rows: 150px 670px 260px;
+    grid-template-columns: 1056px 864px;
+    grid-template-areas: "header header" "pv cyl" "ledger ledger";
+  }
+
+  header {
+    grid-area: header; display: flex; align-items: center; justify-content: space-between;
+    gap: 32px; padding: 0 48px; border-bottom: 2px solid var(--line);
+  }
+  #title { font-size: 44px; font-weight: 700; line-height: 1.15; }
+  #note  { font-size: 28px; color: var(--muted); margin-top: 8px; line-height: 1.25; }
+  .hright { display: flex; align-items: center; gap: 24px; flex: none; }
+  #counter { font-size: 28px; font-weight: 600; color: var(--muted); min-width: 190px; text-align: right; }
+
+  button {
+    font: inherit; color: var(--ink); background: #ffffff; cursor: pointer;
+    border: 2px solid var(--ink); border-radius: 10px;
+  }
+  button:focus { outline: none; }
+  button:focus-visible { outline: 3px solid var(--work); outline-offset: 3px; }
+  .toggle { display: flex; padding: 0; overflow: hidden; font-size: 26px; font-weight: 600; }
+  .toggle span { padding: 10px 22px; }
+  .toggle span.on { background: var(--ink); color: #ffffff; }
+  #fsBtn { width: 60px; height: 60px; padding: 0; display: flex; align-items: center; justify-content: center; }
+
+  #pv  { grid-area: pv; }
+  #cyl { grid-area: cyl; border-left: 2px solid var(--line); }
+  #pv, #cyl { width: 100%; height: 100%; display: block; }
+
+  #ledger {
+    grid-area: ledger; display: grid; grid-template-columns: 1fr 560px; gap: 40px;
+    padding: 16px 48px; border-top: 2px solid var(--line); background: var(--panel);
+  }
+  .bars { display: grid; grid-template-columns: 340px 1fr 150px; column-gap: 20px; row-gap: 10px; align-items: center; align-content: center; }
+  .lab { font-size: 26px; font-weight: 600; white-space: nowrap; }
+  .track { position: relative; height: 34px; background: var(--track); border-radius: 4px; overflow: hidden; }
+  .bar { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
+  .val { font-size: 26px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pending { font-size: 22px; color: var(--muted); position: absolute; left: 14px; top: 50%; transform: translateY(-50%); white-space: nowrap; }
+
+  .works { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr) 1.25fr; gap: 10px; margin-top: 6px; }
+  .wcell { background: #ffffff; border: 2px solid var(--line); border-radius: 8px; padding: 4px 12px; }
+  .wcell.active { border-color: var(--work); }
+  .wcell.net { border-color: var(--work); background: #f3effc; }
+  .wcell .wl { font-size: 22px; color: var(--muted); white-space: nowrap; }
+  .wcell .wv { font-size: 26px; font-weight: 700; color: var(--work); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .wcell.empty .wv { color: #a0aec0; }
+
+  .side { display: flex; flex-direction: column; justify-content: space-between; }
+  #readout { font-size: 26px; line-height: 1.3; }
+  #readout .eq { font-size: 32px; font-weight: 700; }
+  #readout .hint { color: var(--muted); font-size: 24px; }
+  #readout .conv { color: var(--muted); font-size: 22px; }
+  .nav { display: flex; gap: 16px; justify-content: flex-end; }
+  .nav button { font-size: 26px; font-weight: 600; padding: 10px 24px; }
+
+  /* SVG styling */
+  .stk .line { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  .stk.future { opacity: 0.3; }
+  .stk.done .line { stroke-width: 5; }
+  .stk.current .line { stroke-width: 10; }
+  #shade { opacity: 0; transition: opacity 0.5s; }
+  #shade.show { opacity: 1; }
+  .svgtxt { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .arrow { stroke: #ffffff; stroke-width: 3; stroke-linejoin: round; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #shade { transition: none; }
+  }
+
+  #err {
+    display: none; position: fixed; left: 0; right: 0; top: 0; z-index: 10; padding: 10px 16px;
+    background: #fff5f5; color: #9b2c2c; border-bottom: 2px solid #c53030; font-size: 16px;
+  }
+
+  /* Narrow screens (phones): stack vertically, no scaling, allow vertical scroll. */
+  body.narrow { overflow: auto; }
+  body.narrow #stage {
+    position: static; width: 100%; height: auto; transform: none !important;
+    grid-template-rows: auto auto auto auto; grid-template-columns: 100%;
+    grid-template-areas: "header" "pv" "cyl" "ledger";
+  }
+  body.narrow header { flex-direction: column; align-items: stretch; padding: 12px 16px; gap: 10px; }
+  body.narrow #title { font-size: 22px; }
+  body.narrow #note { font-size: 15px; }
+  body.narrow .hright { gap: 10px; justify-content: space-between; }
+  body.narrow #counter { font-size: 15px; min-width: 0; text-align: left; }
+  body.narrow .toggle { font-size: 15px; }
+  body.narrow .toggle span { padding: 6px 12px; }
+  body.narrow #fsBtn { display: none; }
+  body.narrow #pv { aspect-ratio: 1056 / 670; height: auto; }
+  body.narrow #cyl { aspect-ratio: 864 / 670; height: auto; border-left: none; border-top: 2px solid var(--line); }
+  body.narrow #ledger { grid-template-columns: 100%; padding: 12px 16px; gap: 14px; }
+  body.narrow .bars { grid-template-columns: 120px 1fr 72px; column-gap: 8px; }
+  body.narrow .lab, body.narrow .val { font-size: 14px; }
+  body.narrow .track { height: 20px; }
+  body.narrow .pending { display: none; }
+  body.narrow .works { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  body.narrow .wcell .wl { font-size: 12px; }
+  body.narrow .wcell .wv { font-size: 15px; }
+  body.narrow #readout { font-size: 15px; }
+  body.narrow #readout .eq { font-size: 18px; }
+  body.narrow #readout .hint, body.narrow #readout .conv { font-size: 13px; }
+  body.narrow .side { gap: 12px; }
+  body.narrow .nav { justify-content: stretch; }
+  body.narrow .nav button { flex: 1; font-size: 16px; padding: 10px 8px; }
+</style>
+</head>
+<body>
+<div id="err" role="alert"></div>
+
+<div id="stage">
+  <header>
+    <div>
+      <div id="title" aria-live="polite"></div>
+      <div id="note"></div>
+    </div>
+    <div class="hright">
+      <div id="counter"></div>
+      <button id="modeBtn" class="toggle" type="button" title="Toggle engine / heat pump (M)" aria-pressed="false">
+        <span data-mode="engine">Engine</span><span data-mode="heatpump">Heat pump</span>
+      </button>
+      <button id="fsBtn" type="button" title="Full screen (F)" aria-label="Full screen">
+        <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="#1a202c" stroke-width="3.5" stroke-linecap="round">
+          <path d="M4 12V4h8M20 4h8v8M28 20v8h-8M12 28H4v-8"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <svg id="pv" viewBox="0 0 1056 670" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pressure–volume diagram of the Carnot cycle"></svg>
+  <svg id="cyl" viewBox="0 0 864 670" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cylinder, piston and reservoir"></svg>
+
+  <section id="ledger" aria-label="Energy ledger">
+    <div class="bars">
+      <div class="lab" id="lab-QH"></div>
+      <div class="track"><div class="bar" id="bar-QH" style="background: var(--hot)"></div></div>
+      <div class="val" id="val-QH"></div>
+
+      <div class="lab" id="lab-QC"></div>
+      <div class="track"><div class="bar" id="bar-QC" style="background: var(--cold)"></div></div>
+      <div class="val" id="val-QC"></div>
+
+      <div class="lab" id="lab-W"></div>
+      <div class="track"><div class="bar" id="bar-W" style="background: var(--work)"></div><div class="pending" id="pend-W"></div></div>
+      <div class="val" id="val-W"></div>
+
+      <div class="works" id="works"></div>
+    </div>
+    <div class="side">
+      <div id="readout"></div>
+      <div class="nav">
+        <button id="backBtn" type="button" title="Previous (← or Page Up)">◀ Back</button>
+        <button id="resetBtn" type="button" title="Reset (Home)">⟲ Reset</button>
+        <button id="nextBtn" type="button" title="Next (→, Page Down or Space)">Next ▶</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- =====================================================================
+     PHYSICS MODULE
+     Pure functions, no DOM access. Intended to be lifted unchanged into
+     the full version (sliders, T–S view, other cycles).
+
+     Units: SI (J, K, mol). Volumes are relative to V_A (V_A = 1 by
+     default), so pressures are in J per unit volume; only energies are
+     reported in absolute units, and they do not depend on V_A.
+
+     Sign convention: Q = heat INTO the gas, W = work done BY the gas,
+     dU = Q − W (first law).
+     ===================================================================== -->
+<script>
+var CarnotPhysics = (function () {
+  'use strict';
+
+  var R = 8.314462618; // J / (mol K)
+  var MODES = ['engine', 'heatpump'];
+
+  /** Corner states and the four engine-order strokes A→B→C→D→A. */
+  function computeCycle(params) {
+    var p = Object.assign({ TH: 600, TC: 300, gamma: 5 / 3, rV: 2, n: 1, VA: 1 }, params || {});
+    if (!(p.TH > p.TC && p.TC > 0)) throw new RangeError('Need T_H > T_C > 0');
+    if (!(p.gamma > 1)) throw new RangeError('Need gamma > 1');
+    if (!(p.rV > 1)) throw new RangeError('Need V_B/V_A > 1');
+    if (!(p.n > 0 && p.VA > 0)) throw new RangeError('Need n > 0 and V_A > 0');
+
+    var Cv = R / (p.gamma - 1);                          // molar heat capacity at constant V
+    var k = Math.pow(p.TH / p.TC, 1 / (p.gamma - 1));    // V_C/V_B = V_D/V_A (adiabats)
+    function state(name, V, T) { return { name: name, V: V, T: T, p: p.n * R * T / V }; }
+    var states = {
+      A: state('A', p.VA, p.TH),
+      B: state('B', p.VA * p.rV, p.TH),
+      C: state('C', p.VA * p.rV * k, p.TC),
+      D: state('D', p.VA * k, p.TC)
+    };
+    var ctx = { n: p.n, gamma: p.gamma, Cv: Cv, TH: p.TH, TC: p.TC };
+    var strokes = [
+      makeStroke(ctx, states.A, states.B, 'isotherm'),
+      makeStroke(ctx, states.B, states.C, 'adiabat'),
+      makeStroke(ctx, states.C, states.D, 'isotherm'),
+      makeStroke(ctx, states.D, states.A, 'adiabat')
+    ];
+    return { params: p, R: R, Cv: Cv, adiabaticRatio: k, states: states, strokes: strokes, ctx: ctx };
+  }
+
+  function makeStroke(ctx, a, b, kind) {
+    var s = {
+      id: a.name + b.name, from: a.name, to: b.name, kind: kind,
+      V0: a.V, V1: b.V, T0: a.T, T1: b.T,
+      n: ctx.n, gamma: ctx.gamma, Cv: ctx.Cv,
+      reservoir: kind === 'isotherm' ? (a.T === ctx.TH ? 'hot' : 'cold') : null
+    };
+    var e = energiesAt(s, 1);
+    s.Q = e.Q; s.W = e.W; s.dU = e.dU;
+    return s;
+  }
+
+  /** Gas state part-way along a stroke; s in [0,1], V varies linearly in s. */
+  function pointOnStroke(st, s) {
+    s = Math.min(1, Math.max(0, s));
+    var V = st.V0 + (st.V1 - st.V0) * s;
+    var T = st.kind === 'isotherm' ? st.T0 : st.T0 * Math.pow(st.V0 / V, st.gamma - 1); // TV^(γ−1) = const
+    return { V: V, T: T, p: st.n * R * T / V };
+  }
+
+  /** Q, W, ΔU accumulated from the start of the stroke up to s. */
+  function energiesAt(st, s) {
+    var pt = pointOnStroke(st, s);
+    if (st.kind === 'isotherm') {
+      var q = st.n * R * st.T0 * Math.log(pt.V / st.V0);  // ΔU = 0, Q = W = nRT ln(V/V0)
+      return { Q: q, W: q, dU: 0 };
+    }
+    var dU = st.n * st.Cv * (pt.T - st.T0);              // Q = 0, W = −ΔU
+    return { Q: 0, W: -dU, dU: dU };
+  }
+
+  function reverseStroke(st) {
+    var r = {
+      id: st.to + st.from, from: st.to, to: st.from, kind: st.kind,
+      V0: st.V1, V1: st.V0, T0: st.T1, T1: st.T0,
+      n: st.n, gamma: st.gamma, Cv: st.Cv, reservoir: st.reservoir
+    };
+    var e = energiesAt(r, 1);
+    r.Q = e.Q; r.W = e.W; r.dU = e.dU;
+    return r;
+  }
+
+  /** Strokes in the order they are run: engine A→B→C→D, heat pump A→D→C→B. */
+  function strokesFor(cyc, mode) {
+    if (mode === 'engine') return cyc.strokes.slice();
+    if (mode === 'heatpump') return [3, 2, 1, 0].map(function (i) { return reverseStroke(cyc.strokes[i]); });
+    throw new RangeError('Unknown mode: ' + mode);
+  }
+
+  function sampleStroke(st, N) {
+    N = N || 100;
+    var pts = [];
+    for (var i = 0; i <= N; i++) pts.push(pointOnStroke(st, i / N));
+    return pts;
+  }
+
+  /**
+   * Ledger sign convention per mode, so every displayed quantity is positive
+   * at the end of the cycle:
+   *   engine:   Q_H = heat in from hot, Q_C = heat out to cold, W = work done BY the gas
+   *   heatpump: Q_H = heat delivered to hot, Q_C = heat absorbed from cold, W = work done ON the gas
+   */
+  function ledgerSign(mode) { return mode === 'engine' ? 1 : -1; }
+
+  /**
+   * Running totals after nDone complete strokes plus a fraction s of the next.
+   * works[k] is W_(k+1) for that stroke in the mode's sign convention, or null
+   * if that stroke has not started.
+   */
+  function runningTotals(cyc, mode, nDone, s) {
+    var strokes = strokesFor(cyc, mode), sg = ledgerSign(mode);
+    var Qhot = 0, Qcold = 0, W = 0, works = [null, null, null, null];
+    for (var i = 0; i < 4; i++) {
+      var e;
+      if (i < nDone) e = { Q: strokes[i].Q, W: strokes[i].W };
+      else if (i === nDone && s > 0) e = energiesAt(strokes[i], s);
+      else continue;
+      if (strokes[i].reservoir === 'hot') Qhot += e.Q;
+      if (strokes[i].reservoir === 'cold') Qcold += e.Q;
+      W += e.W;
+      works[i] = sg * e.W;
+    }
+    return { QH: sg * Qhot, QC: -sg * Qcold, W: sg * W, works: works };
+  }
+
+  /** Whole-cycle summary (engine sense). */
+  function summary(cyc) {
+    var st = cyc.strokes, TH = cyc.params.TH, TC = cyc.params.TC;
+    var QH = st[0].Q, QC = -st[2].Q;
+    var W = 0, sumDU = 0, sumQ = 0;
+    st.forEach(function (x) { W += x.W; sumDU += x.dU; sumQ += x.Q; });
+    return {
+      QH: QH, QC: QC, W: W, sumDU: sumDU, sumQ: sumQ,
+      eta: W / QH, etaCarnot: 1 - TC / TH,
+      COP: QH / W, COPCarnot: TH / (TH - TC),
+      QH_over_TH: QH / TH, QC_over_TC: QC / TC
+    };
+  }
+
+  return {
+    R: R, MODES: MODES,
+    computeCycle: computeCycle, pointOnStroke: pointOnStroke, energiesAt: energiesAt,
+    reverseStroke: reverseStroke, strokesFor: strokesFor, sampleStroke: sampleStroke,
+    ledgerSign: ledgerSign, runningTotals: runningTotals, summary: summary
+  };
+})();
+if (typeof module !== 'undefined' && module.exports) module.exports = CarnotPhysics;
+</script>
+
+<!-- =====================================================================
+     SELF-CHECK: computed values vs the spec table. Results in the console.
+     Re-run any time with carnotSelfCheck().
+     ===================================================================== -->
+<script>
+function carnotSelfCheck() {
+  'use strict';
+  var P = CarnotPhysics;
+  var cyc = P.computeCycle({ TH: 600, TC: 300, gamma: 5 / 3, rV: 2 });
+  var s = P.summary(cyc);
+  var rows = [];
+  function check(quantity, got, spec, tol, unit) {
+    rows.push({ quantity: quantity, computed: +got.toFixed(4), spec: spec, unit: unit || '', pass: Math.abs(got - spec) <= tol });
+  }
+  var kJ = function (J) { return J / 1000; };
+  var R2 = 0.005 + 1e-9; // spec values are rounded to 2 decimal places
+
+  // Spec table
+  check('V_A', cyc.states.A.V, 1, R2, 'rel');
+  check('V_B', cyc.states.B.V, 2, R2, 'rel');
+  check('V_C', cyc.states.C.V, 5.66, R2, 'rel');
+  check('V_D', cyc.states.D.V, 2.83, R2, 'rel');
+  check('Q_H', kJ(s.QH), 3.46, R2, 'kJ');
+  check('Q_C', kJ(s.QC), 1.73, R2, 'kJ');
+  check('W', kJ(s.W), 1.73, R2, 'kJ');
+  check('eta = W/Q_H', s.eta, 0.5, 1e-9);
+  check('COP = Q_H/W', s.COP, 2, 1e-9);
+  check('Q_H/T_H', s.QH_over_TH, 5.76, R2, 'J/K');
+  check('Q_C/T_C', s.QC_over_TC, 5.76, R2, 'J/K');
+
+  // Internal consistency
+  check('W − (Q_H − Q_C)', s.W - (s.QH - s.QC), 0, 1e-9, 'J');
+  check('eta − (1 − T_C/T_H)', s.eta - s.etaCarnot, 0, 1e-12);
+  check('COP − T_H/(T_H − T_C)', s.COP - s.COPCarnot, 0, 1e-12);
+  check('ΣΔU around cycle', s.sumDU, 0, 1e-9, 'J');
+  check('W_2 + W_4 (adiabats cancel)', cyc.strokes[1].W + cyc.strokes[3].W, 0, 1e-9, 'J');
+  var cornerErr = 0;
+  cyc.strokes.forEach(function (st) {
+    var end = P.pointOnStroke(st, 1), tgt = cyc.states[st.to];
+    cornerErr = Math.max(cornerErr, Math.abs(end.T - tgt.T), Math.abs(end.p - tgt.p) / tgt.p);
+  });
+  check('curves meet the corners', cornerErr, 0, 1e-9);
+
+  // Heat pump: same energies, reversed signs
+  var hp = P.runningTotals(cyc, 'heatpump', 4, 0);
+  check('heat pump Q_H delivered', kJ(hp.QH), 3.46, R2, 'kJ');
+  check('heat pump Q_C absorbed', kJ(hp.QC), 1.73, R2, 'kJ');
+  check('heat pump W in', kJ(hp.W), 1.73, R2, 'kJ');
+  var en = P.runningTotals(cyc, 'engine', 4, 0);
+  check('engine ledger W = ΣW_k', en.W - en.works.reduce(function (a, b) { return a + b; }, 0), 0, 1e-9, 'J');
+
+  var failed = rows.filter(function (r) { return !r.pass; });
+  if (typeof console !== 'undefined') {
+    if (console.table) console.table(rows); else console.log(rows);
+    if (failed.length) console.error('Carnot self-check: ' + failed.length + ' of ' + rows.length + ' FAILED', failed);
+    else console.info('Carnot self-check: all ' + rows.length + ' checks passed');
+  }
+  return failed.length === 0;
+}
+try { carnotSelfCheck(); } catch (e) { console.error('Carnot self-check threw', e); }
+if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCheck = carnotSelfCheck;
+</script>
+
+<!-- =====================================================================
+     RENDERING AND CONTROLS
+     Reads from CarnotPhysics only. The PV diagram and piston use a
+     separate DISPLAY cycle (same formulas, exaggerated parameters) so the
+     schematic reads clearly; every number shown comes from the REAL cycle.
+     ===================================================================== -->
+<script>
+(function () {
+  'use strict';
+  if (typeof document === 'undefined') return;
+
+  function showError(msg) {
+    var e = document.getElementById('err');
+    e.textContent = 'Widget error: ' + msg + ' (see console)';
+    e.style.display = 'block';
+  }
+  window.addEventListener('error', function (ev) { showError(ev.message); });
+
+  var P = CarnotPhysics;
+
+  // ---- Configuration -----------------------------------------------------
+  var REAL = { TH: 600, TC: 300, gamma: 5 / 3, rV: 2, n: 1 };
+  // Schematic only: same pV = const / pV^γ = const curves, chosen so the
+  // cycle has the familiar textbook shape. Never used for any number.
+  var DISPLAY = { TH: 2, TC: 1, gamma: 2.6, rV: 2.0, n: 1 };
+  var STROKE_MS = 1500;
+
+  var cyc = P.computeCycle(REAL);
+  var disp = P.computeCycle(DISPLAY);
+  var sum = P.summary(cyc);
+  var TH = cyc.params.TH, TC = cyc.params.TC;
+
+  var COLOR = { hot: '#c53030', cold: '#2b6cb0', adiabat: '#4a5568', work: '#6b46c1', ink: '#1a202c' };
+
+  // ---- Formatting --------------------------------------------------------
+  function fmtK(T) { return Math.round(T) + ' K'; }
+  function fmtkJ(J, signed) {
+    var v = J / 1000, a = Math.abs(v);
+    if (a < 0.005) return '0.00 kJ';
+    var sign = v < 0 ? '−' : (signed ? '+' : '');
+    return sign + a.toFixed(2) + ' kJ';
+  }
+  function fmtNum(x) { return String(+x.toFixed(2)); }
+  function sub(s) { return s.replace(/([A-Za-z])_([HC1-4k])/g, '$1<sub>$2</sub>'); } // HTML subscripts
+
+  // ---- Text for each state -----------------------------------------------
+  function strokeTitle(st) {
+    var kind = st.kind === 'isotherm' ? 'isothermal' : 'adiabatic';
+    var dir = st.V1 > st.V0 ? 'expansion' : 'compression';
+    var at = st.kind === 'isotherm' ? (st.reservoir === 'hot' ? ' at T_H' : ' at T_C') : '';
+    return st.from + '→' + st.to + ': ' + kind + ' ' + dir + at;
+  }
+  function strokeNote(st) {
+    var expand = st.V1 > st.V0;
+    if (st.kind === 'isotherm') {
+      var Q = st.reservoir === 'hot' ? 'Q_H' : 'Q_C', side = st.reservoir === 'hot' ? 'hot' : 'cold';
+      return expand
+        ? 'ΔU = 0, so all heat in becomes work out (' + Q + ' from the ' + side + ' side).'
+        : 'ΔU = 0, so all work in leaves as heat (' + Q + ' to the ' + side + ' side).';
+    }
+    var T0 = st.T0 === TH ? 'T_H' : 'T_C', T1 = st.T1 === TH ? 'T_H' : 'T_C';
+    return expand
+      ? 'Q = 0, so the work out comes from internal energy: T falls from ' + T0 + ' to ' + T1 + '.'
+      : 'Q = 0, so the work in raises internal energy: T rises from ' + T0 + ' to ' + T1 + '.';
+  }
+  var OVERVIEW = {
+    engine: { title: 'Carnot engine: four reversible strokes',
+              note: 'Two isotherms and two adiabats. The gas starts at A, in contact with the hot reservoir.' },
+    heatpump: { title: 'Heat pump: the same cycle, run backwards',
+                note: 'Same curves, same energies, every arrow reversed. The gas starts at A.' }
+  };
+  var COMPLETE = {
+    engine: { title: 'Cycle complete: net W = enclosed area',
+              note: 'ΔU = 0 around the cycle, so Q_H = W + Q_C. The adiabats cancel: W_2 + W_4 = 0.' },
+    heatpump: { title: 'Cycle complete: net W in = enclosed area',
+                note: 'ΔU = 0 around the cycle, so Q_H = W + Q_C. The adiabats cancel: W_1 + W_3 = 0.' }
+  };
+
+  // ---- State -------------------------------------------------------------
+  var mode = 'engine';
+  var step = 0;          // 0 overview, 1–4 strokes, 5 complete
+  var progress = 1;      // fraction of the current stroke shown
+  var anim = null;
+  var realStrokes, dispStrokes;
+
+  var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function reducedMotion() { return !!(mq && mq.matches); }
+
+  // ---- SVG helpers -------------------------------------------------------
+  var NS = 'http://www.w3.org/2000/svg';
+  function S(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  /** Set SVG text; X_H / X_1 / X_k become subscripts and ^γ a superscript (shifted tspans). */
+  function setText(el, str, px) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var parts = String(str).split(/(_[HC1-4k]|\^γ)/), offset = 0;
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var tok = parts[i], kind = i % 2 === 1 ? tok.charAt(0) : '';
+      var want = kind === '_' ? 0.3 * px : kind === '^' ? -0.4 * px : 0;
+      var t = S('tspan', {}, el);
+      if (kind) t.setAttribute('font-size', (0.7 * px).toFixed(1));
+      if (want !== offset) t.setAttribute('dy', (want - offset).toFixed(1));
+      offset = want;
+      t.textContent = kind ? tok.slice(1) : tok;
+    }
+  }
+  function txt(parent, x, y, px, attrs) {
+    var a = { x: x, y: y, 'font-size': px, 'class': 'svgtxt', fill: COLOR.ink };
+    for (var k in attrs) a[k] = attrs[k];
+    return S('text', a, parent);
+  }
+  /** Block arrow polygon from (x1,y1) to (x2,y2) with shaft width w. */
+  function arrowPoints(x1, y1, x2, y2, w) {
+    var dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1;
+    var ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+    var hw = w / 2, headW = w / 2 + 18, headL = Math.min(L * 0.6, Math.max(30, w * 0.9));
+    var bx = x2 - ux * headL, by = y2 - uy * headL;
+    var pts = [
+      [x1 + nx * hw, y1 + ny * hw], [bx + nx * hw, by + ny * hw], [bx + nx * headW, by + ny * headW],
+      [x2, y2],
+      [bx - nx * headW, by - ny * headW], [bx - nx * hw, by - ny * hw], [x1 - nx * hw, y1 - ny * hw]
+    ];
+    return pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+  }
+  function mix(c1, c2, f) {
+    var a = parseInt(c1.slice(1), 16), b = parseInt(c2.slice(1), 16);
+    var r = Math.round(((a >> 16) & 255) * (1 - f) + ((b >> 16) & 255) * f);
+    var g = Math.round(((a >> 8) & 255) * (1 - f) + ((b >> 8) & 255) * f);
+    var bl = Math.round((a & 255) * (1 - f) + (b & 255) * f);
+    return 'rgb(' + r + ',' + g + ',' + bl + ')';
+  }
+  function tFrac(T) { return Math.min(1, Math.max(0, (T - TC) / (TH - TC))); }
+  function strokeColor(st) { return st.kind === 'adiabat' ? COLOR.adiabat : COLOR[st.reservoir]; }
+  function geomKey(st) { return [st.from, st.to].sort().join(''); }
+
+  // ======================================================================
+  // PV diagram (schematic)
+  // ======================================================================
+  var pvSvg = document.getElementById('pv');
+  var PV = { W: 1056, H: 670, L: 110, R: 60, T: 60, B: 90 };
+  var ds = disp.states;
+  var Vlo = ds.A.V, Vhi = ds.C.V, plo = ds.C.p, phi = ds.A.p;
+  var Vmin = Vlo - 0.12 * (Vhi - Vlo), Vmax = Vhi + 0.1 * (Vhi - Vlo);
+  var pmin = plo - 0.12 * (phi - plo), pmax = phi + 0.08 * (phi - plo);
+  function X(V) { return PV.L + (V - Vmin) / (Vmax - Vmin) * (PV.W - PV.L - PV.R); }
+  function Y(p) { return PV.T + (1 - (p - pmin) / (pmax - pmin)) * (PV.H - PV.T - PV.B); }
+  function xy(pt) { return [X(pt.V), Y(pt.p)]; }
+
+  var pvEls = { groups: {}, arrowheads: {} };
+
+  function buildPV() {
+    var axY = PV.H - PV.B, axX = PV.L;
+    // Axes (no ticks: schematic)
+    S('path', { d: 'M' + axX + ',' + (PV.T - 30) + ' L' + axX + ',' + axY + ' L' + (PV.W - PV.R + 30) + ',' + axY,
+                fill: 'none', stroke: COLOR.ink, 'stroke-width': 3 }, pvSvg);
+    S('polygon', { points: (axX - 10) + ',' + (PV.T - 22) + ' ' + (axX + 10) + ',' + (PV.T - 22) + ' ' + axX + ',' + (PV.T - 46), fill: COLOR.ink }, pvSvg);
+    S('polygon', { points: (PV.W - PV.R + 22) + ',' + (axY - 10) + ' ' + (PV.W - PV.R + 22) + ',' + (axY + 10) + ' ' + (PV.W - PV.R + 46) + ',' + axY, fill: COLOR.ink }, pvSvg);
+    txt(pvSvg, axX - 28, PV.T - 18, 36, { 'font-style': 'italic', 'text-anchor': 'middle' }).textContent = 'p';
+    txt(pvSvg, PV.W - PV.R + 30, axY + 50, 36, { 'font-style': 'italic', 'text-anchor': 'middle' }).textContent = 'V';
+    txt(pvSvg, PV.W - PV.R - 10, axY + 50, 22, { 'text-anchor': 'end', fill: '#718096', 'font-style': 'italic' })
+      .textContent = 'schematic, not to scale';
+
+    // Enclosed-area shading + "net W" label (state 5)
+    var poly = [];
+    disp.strokes.forEach(function (st) { P.sampleStroke(st, 120).forEach(function (pt) { poly.push(xy(pt)); }); });
+    var shade = S('g', { id: 'shade' }, pvSvg);
+    S('polygon', { points: poly.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '),
+                   fill: COLOR.work, 'fill-opacity': 0.2 }, shade);
+    var anchor = interiorAnchor(poly);
+    var wl = txt(shade, anchor.x, anchor.y + 12, 34, { 'text-anchor': 'middle', 'font-weight': 700, fill: COLOR.work });
+    wl.textContent = 'net W';
+
+    // Strokes, each with a direction arrowhead at its midpoint
+    disp.strokes.forEach(function (st) {
+      var g = S('g', { 'class': 'stk future' }, pvSvg);
+      var pts = P.sampleStroke(st, 120).map(xy);
+      S('path', { 'class': 'line', stroke: strokeColor(st),
+                  d: 'M' + pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' L') }, g);
+      pvEls.arrowheads[geomKey(st)] = S('polygon', { fill: strokeColor(st) }, g);
+      pvEls.groups[geomKey(st)] = g;
+    });
+
+    // Corner labels, pushed outward from the cycle's centre
+    var cx = 0, cy = 0;
+    poly.forEach(function (p) { cx += p[0]; cy += p[1]; });
+    cx /= poly.length; cy /= poly.length;
+    var order = ['A', 'B', 'C', 'D'];
+    order.forEach(function (name, i) {
+      var c = xy(ds[name]), prev = xy(ds[order[(i + 3) % 4]]), next = xy(ds[order[(i + 1) % 4]]);
+      var tx = next[0] - prev[0], ty = next[1] - prev[1], tl = Math.hypot(tx, ty);
+      var nx = -ty / tl, ny = tx / tl;
+      if (nx * (cx - c[0]) + ny * (cy - c[1]) > 0) { nx = -nx; ny = -ny; }
+      S('circle', { cx: c[0], cy: c[1], r: 6, fill: COLOR.ink }, pvSvg);
+      txt(pvSvg, c[0] + nx * 40, c[1] + ny * 40 + 13, 38, { 'text-anchor': 'middle', 'font-weight': 700 }).textContent = name;
+    });
+
+    // Legend (algebraic labels only)
+    var lg = S('g', {}, pvSvg), lx = 640, ly = 70;
+    [[COLOR.hot, 'T_H isotherm (pV = nRT_H)'], [COLOR.cold, 'T_C isotherm (pV = nRT_C)'], [COLOR.adiabat, 'adiabat (Q = 0, pV^γ = const)']]
+      .forEach(function (row, i) {
+        var y = ly + i * 42;
+        S('line', { x1: lx, y1: y - 9, x2: lx + 46, y2: y - 9, stroke: row[0], 'stroke-width': 6, 'stroke-linecap': 'round' }, lg);
+        setText(txt(lg, lx + 60, y, 24), row[1], 24);
+      });
+
+    // State dot
+    pvEls.dot = S('circle', { r: 15, stroke: COLOR.ink, 'stroke-width': 3 }, pvSvg);
+    pvEls.shade = shade;
+  }
+
+  /** Point inside the polygon with the largest vertical clearance. */
+  function interiorAnchor(poly) {
+    var xs = poly.map(function (p) { return p[0]; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), best = null;
+    for (var i = 1; i < 80; i++) {
+      var x = x0 + (x1 - x0) * i / 80, ys = [];
+      for (var j = 0; j < poly.length; j++) {
+        var a = poly[j], b = poly[(j + 1) % poly.length];
+        if ((a[0] - x) * (b[0] - x) < 0) ys.push(a[1] + (x - a[0]) / (b[0] - a[0]) * (b[1] - a[1]));
+      }
+      if (ys.length >= 2) {
+        ys.sort(function (p, q) { return p - q; });
+        var gap = ys[1] - ys[0];
+        if (!best || gap > best.gap) best = { x: x, y: (ys[0] + ys[1]) / 2, gap: gap };
+      }
+    }
+    return best || { x: (x0 + x1) / 2, y: PV.H / 2, gap: 0 };
+  }
+
+  function placeArrowheads() {
+    dispStrokes.forEach(function (st) {
+      var a = xy(P.pointOnStroke(st, 0.47)), b = xy(P.pointOnStroke(st, 0.53));
+      var dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+      var m = xy(P.pointOnStroke(st, 0.5)), tip = [m[0] + ux * 16, m[1] + uy * 16];
+      var base = [m[0] - ux * 16, m[1] - uy * 16];
+      pvEls.arrowheads[geomKey(st)].setAttribute('points',
+        tip[0] + ',' + tip[1] + ' ' + (base[0] - uy * 14) + ',' + (base[1] + ux * 14) + ' ' + (base[0] + uy * 14) + ',' + (base[1] - ux * 14));
+    });
+  }
+
+  // ======================================================================
+  // Cylinder (schematic)
+  // ======================================================================
+  var cylSvg = document.getElementById('cyl');
+  var CY = { x0: 300, x1: 560, base: 520, maxH: 400, piston: 34, cx: 430 };
+  var cyEls = {};
+  var Emax = 0;
+  cyc.strokes.forEach(function (st) { Emax = Math.max(Emax, Math.abs(st.Q), Math.abs(st.W)); });
+  function widthFor(E) { return Math.abs(E) / Emax * 58; } // arrow width ∝ energy
+
+  function buildCyl() {
+    var defs = S('defs', {}, cylSvg);
+    var pat = S('pattern', { id: 'hatch', width: 18, height: 18, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+    S('rect', { width: 18, height: 18, fill: '#edf2f7' }, pat);
+    S('line', { x1: 0, y1: 0, x2: 0, y2: 18, stroke: '#718096', 'stroke-width': 6 }, pat);
+
+    // Gas temperature readout
+    txt(cylSvg, 24, 44, 24, { fill: '#4a5568' }).textContent = 'Gas temperature';
+    cyEls.gasT = txt(cylSvg, 24, 96, 46, { 'font-weight': 700 });
+
+    // Reservoir / insulation block
+    cyEls.block = S('rect', { x: 160, y: 532, width: 540, height: 110, rx: 8 }, cylSvg);
+    cyEls.blockLabBg = S('rect', { x: 172, y: 562, height: 50, rx: 6, fill: '#ffffff' }, cylSvg);
+    cyEls.blockLab = txt(cylSvg, 184, 598, 30, { 'font-weight': 700 });   // insulation label (left)
+    cyEls.resLab1 = txt(cylSvg, 492, 574, 30, { 'font-weight': 700, fill: '#ffffff' }); // reservoir labels sit
+    cyEls.resLab2 = txt(cylSvg, 492, 614, 30, { 'font-weight': 700, fill: '#ffffff' }); // right of the Q arrow
+
+    // Gas, piston, rod, walls
+    cyEls.gas = S('rect', { x: CY.x0, width: CY.x1 - CY.x0 }, cylSvg);
+    cyEls.rod = S('rect', { x: CY.cx - 13, width: 26, height: 160, fill: '#718096' }, cylSvg);
+    cyEls.piston = S('rect', { x: CY.x0, width: CY.x1 - CY.x0, height: CY.piston, fill: '#4a5568' }, cylSvg);
+    var wallTop = CY.base - CY.maxH - CY.piston - 14;
+    S('rect', { x: CY.x0 - 12, y: wallTop, width: 12, height: CY.base - wallTop + 12, fill: COLOR.ink }, cylSvg);
+    S('rect', { x: CY.x1, y: wallTop, width: 12, height: CY.base - wallTop + 12, fill: COLOR.ink }, cylSvg);
+    S('rect', { x: CY.x0 - 12, y: CY.base, width: CY.x1 - CY.x0 + 24, height: 6, fill: COLOR.ink }, cylSvg);
+
+    // Heat arrow through the base, work arrow at right
+    cyEls.qArrow = S('polygon', { 'class': 'arrow' }, cylSvg);
+    cyEls.qLab1 = txt(cylSvg, 586, 466, 30, { 'font-weight': 700 });
+    cyEls.qLab2 = txt(cylSvg, 586, 500, 24, { fill: '#4a5568' });
+    cyEls.wArrow = S('polygon', { 'class': 'arrow', fill: COLOR.work }, cylSvg);
+    cyEls.wLab1 = txt(cylSvg, 700, 186, 30, { 'font-weight': 700, fill: COLOR.work, 'text-anchor': 'middle' });
+    cyEls.wLab2 = txt(cylSvg, 700, 218, 24, { fill: '#4a5568', 'text-anchor': 'middle' });
+
+    // State 5 only: Q_C arrow to/from a cold-reservoir tag at left
+    cyEls.coldTag = S('g', {}, cylSvg);
+    S('rect', { x: 20, y: 420, width: 136, height: 94, rx: 8, fill: COLOR.cold }, cyEls.coldTag);
+    txt(cyEls.coldTag, 88, 460, 26, { fill: '#ffffff', 'font-weight': 700, 'text-anchor': 'middle' }).textContent = 'COLD';
+    txt(cyEls.coldTag, 88, 494, 26, { fill: '#ffffff', 'font-weight': 700, 'text-anchor': 'middle' }).textContent = fmtK(TC);
+    cyEls.qcArrow = S('polygon', { 'class': 'arrow', fill: COLOR.cold }, cylSvg);
+    cyEls.qcLab1 = txt(cylSvg, 224, 364, 30, { 'font-weight': 700, fill: COLOR.cold, 'text-anchor': 'middle' });
+    cyEls.qcLab2 = txt(cylSvg, 224, 396, 24, { fill: '#4a5568', 'text-anchor': 'middle' });
+  }
+
+  function gasTopFor(V) { return CY.base - V / ds.C.V * CY.maxH; }
+
+  // ======================================================================
+  // Ledger
+  // ======================================================================
+  var $ = function (id) { return document.getElementById(id); };
+  var LEDGER_MAX = sum.QH; // all bars share one scale
+
+  function buildWorks() {
+    var box = $('works');
+    box.innerHTML = '';
+    for (var i = 0; i < 5; i++) {
+      var c = document.createElement('div');
+      c.className = 'wcell' + (i === 4 ? ' net' : '');
+      c.innerHTML = '<div class="wl"></div><div class="wv"></div>';
+      box.appendChild(c);
+    }
+  }
+
+  // ======================================================================
+  // Render
+  // ======================================================================
+  function setMode(m) {
+    mode = m;
+    realStrokes = P.strokesFor(cyc, mode);
+    dispStrokes = P.strokesFor(disp, mode);
+    placeArrowheads();
+    var btn = $('modeBtn');
+    btn.setAttribute('aria-pressed', mode === 'heatpump' ? 'true' : 'false');
+    Array.prototype.forEach.call(btn.querySelectorAll('span'), function (s) {
+      s.className = s.getAttribute('data-mode') === mode ? 'on' : '';
+    });
+  }
+
+  function render() {
+    var engine = mode === 'engine';
+    var cur = step >= 1 && step <= 4 ? step - 1 : -1;
+    var s = cur >= 0 ? progress : 0;
+
+    // Header
+    var text = step === 0 ? OVERVIEW[mode] : step === 5 ? COMPLETE[mode]
+      : { title: strokeTitle(realStrokes[cur]), note: strokeNote(realStrokes[cur]) };
+    $('title').innerHTML = sub(text.title);
+    $('note').innerHTML = sub(text.note);
+    $('counter').textContent = step === 0 ? 'Overview' : step === 5 ? 'Complete' : 'Stroke ' + step + ' of 4';
+
+    // PV strokes
+    dispStrokes.forEach(function (st, i) {
+      var status = step === 5 || i < cur ? 'done' : i === cur ? 'current' : 'future';
+      pvEls.groups[geomKey(st)].setAttribute('class', 'stk ' + status);
+    });
+    pvEls.shade.setAttribute('class', step === 5 ? 'show' : '');
+
+    // Current point: display cycle for position, real cycle for temperature
+    var dpt, T;
+    if (cur >= 0) { dpt = P.pointOnStroke(dispStrokes[cur], s); T = P.pointOnStroke(realStrokes[cur], s).T; }
+    else { dpt = ds.A; T = cyc.states.A.T; }
+    var d = xy(dpt);
+    pvEls.dot.setAttribute('cx', d[0].toFixed(1));
+    pvEls.dot.setAttribute('cy', d[1].toFixed(1));
+    pvEls.dot.setAttribute('fill', mix(COLOR.cold, COLOR.hot, tFrac(T)));
+
+    // Cylinder
+    var top = gasTopFor(dpt.V);
+    cyEls.gas.setAttribute('y', top.toFixed(1));
+    cyEls.gas.setAttribute('height', (CY.base - top).toFixed(1));
+    cyEls.gas.setAttribute('fill', mix('#c6dbf2', '#f6c3bd', tFrac(T)));
+    cyEls.piston.setAttribute('y', (top - CY.piston).toFixed(1));
+    cyEls.rod.setAttribute('y', (top - CY.piston - 160).toFixed(1));
+    setText(cyEls.gasT, 'T = ' + fmtK(T), 46);
+    cyEls.gasT.setAttribute('fill', mix(COLOR.cold, COLOR.hot, tFrac(T)));
+
+    var block = cur >= 0 ? (realStrokes[cur].kind === 'adiabat' ? 'insul' : realStrokes[cur].reservoir) : 'hot';
+    cyEls.block.setAttribute('fill', block === 'hot' ? COLOR.hot : block === 'cold' ? COLOR.cold : 'url(#hatch)');
+    cyEls.block.setAttribute('stroke', block === 'insul' ? '#4a5568' : 'none');
+    cyEls.block.setAttribute('stroke-width', 3);
+    var insul = block === 'insul';
+    setText(cyEls.blockLab, insul ? 'INSULATION  (Q = 0)' : '', 30);
+    cyEls.blockLabBg.setAttribute('width', insul ? 330 : 0);
+    setText(cyEls.resLab1, insul ? '' : block === 'hot' ? 'HOT' : 'COLD', 30);
+    setText(cyEls.resLab2, insul ? '' : block === 'hot' ? 'T_H = ' + fmtK(TH) : 'T_C = ' + fmtK(TC), 30);
+
+    var showQ = false, showW = false, showQc = step === 5;
+    var qInto = true, qE = 0, qRes = 'hot', wOut = true, wE = 0, wName = 'W';
+    if (cur >= 0) {
+      var st = realStrokes[cur];
+      if (st.kind === 'isotherm') { showQ = true; qE = st.Q; qInto = st.Q > 0; qRes = st.reservoir; }
+      showW = true; wE = st.W; wOut = st.W > 0; wName = 'W_' + (cur + 1);
+    } else if (step === 5) {
+      showQ = true; qE = sum.QH; qInto = engine; qRes = 'hot';
+      showW = true; wE = sum.W; wOut = engine; wName = 'W';
+    }
+
+    // Q through the base
+    cyEls.qArrow.style.display = showQ ? '' : 'none';
+    [cyEls.qLab1, cyEls.qLab2].forEach(function (e) { e.style.display = showQ ? '' : 'none'; });
+    if (showQ) {
+      var qy0 = 622, qy1 = Math.max(470, top + 30);
+      cyEls.qArrow.setAttribute('points', qInto ? arrowPoints(CY.cx, qy0, CY.cx, qy1, widthFor(qE))
+                                                : arrowPoints(CY.cx, qy1, CY.cx, qy0, widthFor(qE)));
+      cyEls.qArrow.setAttribute('fill', COLOR[qRes]);
+      setText(cyEls.qLab1, qRes === 'hot' ? 'Q_H' : 'Q_C', 30);
+      cyEls.qLab1.setAttribute('fill', COLOR[qRes]);
+      cyEls.qLab2.textContent = qInto ? 'heat in' : 'heat out';
+    }
+    // W at right
+    cyEls.wArrow.style.display = showW ? '' : 'none';
+    [cyEls.wLab1, cyEls.wLab2].forEach(function (e) { e.style.display = showW ? '' : 'none'; });
+    if (showW) {
+      cyEls.wArrow.setAttribute('points', wOut ? arrowPoints(700, 400, 700, 240, widthFor(wE))
+                                               : arrowPoints(700, 240, 700, 400, widthFor(wE)));
+      setText(cyEls.wLab1, wName, 30);
+      cyEls.wLab2.textContent = (step === 5 ? 'net ' : '') + (wOut ? 'work out' : 'work in');
+    }
+    // Q_C (state 5)
+    [cyEls.coldTag, cyEls.qcArrow, cyEls.qcLab1, cyEls.qcLab2].forEach(function (e) { e.style.display = showQc ? '' : 'none'; });
+    if (showQc) {
+      var y = 472;
+      cyEls.qcArrow.setAttribute('points', engine ? arrowPoints(CY.x0 - 16, y, 160, y, widthFor(sum.QC))
+                                                  : arrowPoints(160, y, CY.x0 - 16, y, widthFor(sum.QC)));
+      setText(cyEls.qcLab1, 'Q_C', 30);
+      cyEls.qcLab2.textContent = engine ? 'heat out' : 'heat in';
+    }
+
+    renderLedger(cur, s);
+  }
+
+  function renderLedger(cur, s) {
+    var engine = mode === 'engine';
+    var nDone = step === 5 ? 4 : cur >= 0 ? cur : 0;
+    var t = P.runningTotals(cyc, mode, nDone, cur >= 0 ? s : 0);
+
+    $('lab-QH').innerHTML = sub(engine ? 'Q_H in (from hot)' : 'Q_H delivered (to hot)');
+    $('lab-QC').innerHTML = sub(engine ? 'Q_C out (to cold)' : 'Q_C absorbed (from cold)');
+    $('lab-W').innerHTML = engine ? 'W out (net)' : 'W in (net)';
+    function bar(id, v) {
+      $('bar-' + id).style.width = (Math.max(0, v) / LEDGER_MAX * 100).toFixed(2) + '%';
+      $('val-' + id).textContent = fmtkJ(v);
+    }
+    bar('QH', t.QH);
+    bar('QC', t.QC);
+    if (step === 5) {
+      bar('W', t.W);
+      $('pend-W').textContent = '';
+    } else {
+      $('bar-W').style.width = '0%';
+      $('val-W').textContent = '—';
+      $('pend-W').innerHTML = sub('net W = W_1 + W_2 + W_3 + W_4, shown when the cycle closes');
+    }
+
+    // Per-stroke work record W_1..W_4 and the net W
+    var cells = $('works').children;
+    for (var i = 0; i < 4; i++) {
+      var st = realStrokes[i], c = cells[i], w = t.works[i];
+      c.className = 'wcell' + (w === null ? ' empty' : '') + (i === cur ? ' active' : '');
+      c.children[0].innerHTML = sub('W_' + (i + 1) + '  (' + st.from + '→' + st.to + ')');
+      c.children[1].textContent = w === null ? '—' : fmtkJ(w, true);
+    }
+    var net = cells[4];
+    net.children[0].innerHTML = sub(engine ? 'W = ΣW_k  (+ = by gas)' : 'W = ΣW_k  (+ = on gas)');
+    net.children[1].textContent = step === 5 ? fmtkJ(t.W, true) : '—';
+    net.className = 'wcell net' + (step === 5 ? '' : ' empty');
+
+    // Readout
+    var r = $('readout');
+    if (step === 5) {
+      r.innerHTML =
+        '<div class="eq">' + sub('Q_H = W + Q_C') + '</div>' +
+        '<div>' + fmtkJ(sum.QH) + ' = ' + fmtkJ(sum.W) + ' + ' + fmtkJ(sum.QC) + '</div>' +
+        '<div class="eq">' + (engine
+          ? sub('η = W/Q_H = 1 − T_C/T_H = ' + fmtNum(sum.etaCarnot * 100) + '%')
+          : sub('COP = Q_H/W = T_H/(T_H − T_C) = ' + fmtNum(sum.COPCarnot))) + '</div>';
+    } else {
+      r.innerHTML =
+        '<div class="conv">' + sub(engine ? 'W_k: work done by the gas on each stroke (+ = out)'
+                                          : 'W_k: work done on the gas on each stroke (+ = in)') + '</div>' +
+        '<div class="hint">' + (engine ? 'η' : 'COP') + ' appears when the cycle closes.</div>';
+    }
+  }
+
+  // ======================================================================
+  // Animation and actions
+  // ======================================================================
+  function ease(u) { return u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; }
+
+  function startStrokeAnimation() {
+    if (reducedMotion()) { progress = 1; render(); return; }
+    progress = 0;
+    render();
+    var t0 = null;
+    anim = { raf: 0 };
+    function tick(now) {
+      if (!anim) return;
+      if (t0 === null) t0 = now;
+      var u = Math.min(1, (now - t0) / STROKE_MS);
+      progress = ease(u);
+      render();
+      if (u < 1) anim.raf = requestAnimationFrame(tick); else anim = null;
+    }
+    anim.raf = requestAnimationFrame(tick);
+  }
+  function finishAnimation() {
+    if (!anim) return;
+    cancelAnimationFrame(anim.raf);
+    anim = null;
+    progress = 1;
+    render();
+  }
+
+  function next() {
+    finishAnimation();
+    if (step >= 5) return;
+    step++;
+    if (step <= 4) startStrokeAnimation(); else { progress = 1; render(); }
+  }
+  function prev() {
+    finishAnimation();
+    if (step <= 0) return;
+    step--;
+    progress = 1; // stepping back jumps without animation
+    render();
+  }
+  function reset() {
+    finishAnimation();
+    step = 0; progress = 1;
+    render();
+  }
+  function toggleMode() {
+    finishAnimation();
+    setMode(mode === 'engine' ? 'heatpump' : 'engine');
+    step = 0; progress = 1;
+    render();
+  }
+
+  var root = document.documentElement;
+  var fsRequest = root.requestFullscreen || root.webkitRequestFullscreen;
+  function toggleFullscreen() {
+    try {
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      var r;
+      if (fsEl) r = (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else if (fsRequest) r = fsRequest.call(root);
+      if (r && typeof r.catch === 'function') r.catch(function () {});
+    } catch (e) { /* ignore: full screen is a convenience */ }
+  }
+
+  // ---- Keyboard: presentation clickers send PageDown/PageUp or arrows ------
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key, act = null;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ' || k === 'Spacebar') act = next;
+    else if (k === 'ArrowLeft' || k === 'PageUp') act = prev;
+    else if (k === 'Home') act = reset;
+    else if (k === 'm' || k === 'M') act = toggleMode;
+    else if (k === 'f' || k === 'F') act = toggleFullscreen;
+    if (!act) return; // everything else (e.g. B for blank screen) is ignored
+    e.preventDefault();
+    // Blur a focused button so Space/Enter cannot also "click" it.
+    if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+    if (e.repeat && act !== next && act !== prev) return;
+    act();
+  });
+
+  function bindButton(id, fn) {
+    var b = $(id);
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); }); // don't take focus on click
+    b.addEventListener('click', function () { fn(); });
+  }
+
+  // ---- Fit the 16:9 stage to the window ------------------------------------
+  var stage = $('stage');
+  function fit() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var narrow = w < 700;
+    document.body.classList.toggle('narrow', narrow);
+    if (narrow) { stage.style.transform = ''; return; }
+    var sc = Math.min(w / 1920, h / 1080);
+    stage.style.transform = 'translate(' + ((w - 1920 * sc) / 2).toFixed(1) + 'px,' + ((h - 1080 * sc) / 2).toFixed(1) + 'px) scale(' + sc + ')';
+  }
+
+  // ---- Init ----------------------------------------------------------------
+  try {
+    buildPV();
+    buildCyl();
+    buildWorks();
+    setMode('engine');
+    bindButton('nextBtn', next);
+    bindButton('backBtn', prev);
+    bindButton('resetBtn', reset);
+    bindButton('modeBtn', toggleMode);
+    bindButton('fsBtn', toggleFullscreen);
+    if (!fsRequest) $('fsBtn').style.display = 'none';
+    window.addEventListener('resize', fit);
+    document.addEventListener('fullscreenchange', fit);
+    document.addEventListener('webkitfullscreenchange', fit);
+    fit();
+    render();
+  } catch (e) {
+    showError(e.message);
+    throw e;
+  }
+
+  // Exposed for debugging from the console
+  window.carnotWidget = {
+    state: function () { return { mode: mode, step: step, progress: progress }; },
+    next: next, prev: prev, reset: reset, toggleMode: toggleMode
+  };
+})();
+</script>
+</body>
+</html>
