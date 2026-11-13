@@ -410,10 +410,14 @@ function carnotSelfCheck() {
   check('heat pump Q_H delivered', kJ(hp.QH), 3.46, R2, 'kJ');
   check('heat pump Q_C absorbed', kJ(hp.QC), 1.73, R2, 'kJ');
   check('heat pump W in', kJ(hp.W), 1.73, R2, 'kJ');
-  // Home heat pump used in heat pump mode (318 K radiators, 278 K outdoor air)
-  var home = P.computeCycle({ TH: 318, TC: 278, gamma: 5 / 3, rV: 2 });
+  // Home heat pump used in heat pump mode (15 °C outdoor air 288 K → 50 °C hot water 323 K)
+  var home = P.computeCycle({ TH: 323, TC: 288, gamma: 5 / 3, rV: 2 });
   var homeHP = P.runningTotals(home, 'heatpump', 4, 0);
-  check('home heat pump COP = Q_H/W', homeHP.QH / homeHP.W, 318 / 40, 1e-9);
+  check('home heat pump Q_C', kJ(homeHP.QC), 1.66, R2, 'kJ');
+  check('home heat pump Q_H', kJ(homeHP.QH), 1.86, R2, 'kJ');
+  check('home heat pump W in', kJ(homeHP.W), 0.20, R2, 'kJ');
+  check('home heat pump COP = Q_H/W', homeHP.QH / homeHP.W, 9.23, R2);
+  check('home heat pump COP − T_H/(T_H − T_C)', homeHP.QH / homeHP.W - 323 / 35, 0, 1e-9);
   check('home heat pump Q_H = W + Q_C', homeHP.QH - homeHP.W - homeHP.QC, 0, 1e-9, 'J');
   var en = P.runningTotals(cyc, 'engine', 4, 0);
   var sumW = function (t) { return t.works.reduce(function (a, b) { return a + b; }, 0); };
@@ -465,11 +469,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
 
   // ---- Configuration -----------------------------------------------------
   // Real cycles behind every number. Engine: the spec's 600 K / 300 K.
-  // Heat pump: a home air-source heat pump, 5 °C outdoor air (278 K) to
-  // 45 °C radiator water (318 K).
+  // Heat pump: a home air-source heat pump, 15 °C outdoor air (288 K) to
+  // 50 °C hot water (323 K).
   var REAL = {
     engine:   { TH: 600, TC: 300, gamma: 5 / 3, rV: 2, n: 1 },
-    heatpump: { TH: 318, TC: 278, gamma: 5 / 3, rV: 2, n: 1 }
+    heatpump: { TH: 323, TC: 288, gamma: 5 / 3, rV: 2, n: 1 }
   };
   var CELSIUS = 273.15;
   // Schematic only: same pV = const / pV^γ = const curves, chosen so the
@@ -523,17 +527,22 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     var at = st.kind === 'isotherm' ? (st.reservoir === 'hot' ? ' at T_H' : ' at T_C') : '';
     return st.from + '→' + st.to + ': ' + kind + ' ' + dir + at;
   }
+  /** 'out' if the gas does work on the piston on this stroke, else 'in'. */
+  function workDir(st) { return st.W > 0 ? 'out' : 'in'; }
+  /** Convention-free subtitles: magnitudes in words, signs only on ΔU. */
   function strokeNote(st) {
-    return st.kind === 'isotherm' ? 'ΔU = 0, so Q = W' : 'Q = 0, so W = −ΔU';
+    var expand = st.V1 > st.V0;
+    if (st.kind === 'isotherm') return expand ? 'ΔU = 0: heat in = work out' : 'ΔU = 0: work in = heat out';
+    return expand ? 'Q = 0: work out = −ΔU' : 'Q = 0: work in = ΔU';
   }
   var OVERVIEW = {
     engine: { title: 'Carnot engine', note: '' },
     heatpump: { title: 'Carnot heat pump (home)',
-                note: 'Outdoor air ' + fmtC(REAL.heatpump.TC) + ' → radiators ' + fmtC(REAL.heatpump.TH) }
+                note: 'Outdoor air ' + fmtC(REAL.heatpump.TC) + ' → hot water ' + fmtC(REAL.heatpump.TH) }
   };
   var COMPLETE = {
-    engine: { title: 'Cycle complete: net W = enclosed area', note: '' },
-    heatpump: { title: 'Cycle complete: net W in = enclosed area', note: '' }
+    engine: { title: 'Cycle complete: net work out = enclosed area', note: '' },
+    heatpump: { title: 'Cycle complete: net work in = enclosed area', note: '' }
   };
 
   // ---- State -------------------------------------------------------------
@@ -627,7 +636,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     txt(pvSvg, PV.W - PV.R - 10, axY + 50, 24, { 'text-anchor': 'end', fill: '#718096', 'font-style': 'italic' })
       .textContent = 'schematic, not to scale';
 
-    // Enclosed-area shading + "net W" label (state 5)
+    // Enclosed-area shading + "net work" label (state 5)
     var poly = [];
     disp.strokes.forEach(function (st) { P.sampleStroke(st, 120).forEach(function (pt) { poly.push(xy(pt)); }); });
     var shade = S('g', { id: 'shade' }, pvSvg);
@@ -635,7 +644,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
                    fill: COLOR.work, 'fill-opacity': 0.2 }, shade);
     var anchor = interiorAnchor(poly);
     var wl = txt(shade, anchor.x, anchor.y + 12, 34, { 'text-anchor': 'middle', 'font-weight': 700, fill: COLOR.work });
-    wl.textContent = 'net W';
+    wl.textContent = 'net work';
 
     // Strokes, each with a direction arrowhead at its midpoint
     disp.strokes.forEach(function (st) {
@@ -872,7 +881,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
                                                : arrowPoints(760, 200, 760, 360, widthFor(wE)));
       var adiabat = realStrokes[cur].kind === 'adiabat';
       setText(cyEls.wLab, 'Work ' + (wOut ? 'out' : 'in'), 30);
-      setText(cyEls.wSym, '(' + wName + (adiabat ? ' = −ΔU' : '') + ')', 30);
+      // Matches the subtitle: work out = −ΔU on expansion, work in = ΔU on compression
+      setText(cyEls.wSym, '(' + wName + (adiabat ? (wOut ? ' = −ΔU' : ' = ΔU') : '') + ')', 30);
     }
 
     renderLedger(cur, s);
@@ -885,7 +895,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
 
     $('lab-QH').innerHTML = sub(engine ? 'Q_H in' : 'Q_H delivered');
     $('lab-QC').innerHTML = sub(engine ? 'Q_C out' : 'Q_C absorbed');
-    $('lab-W').innerHTML = engine ? 'Net work out (W)' : 'Net work in (W)';
+    $('lab-W').innerHTML = engine ? 'Net work out' : 'Net work in';
     function bar(id, v) {
       $('bar-' + id).style.width = (Math.max(0, v) / LEDGER_MAX * 100).toFixed(2) + '%';
       $('val-' + id).textContent = fmtkJ(v);
@@ -899,20 +909,19 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
       $('val-W').textContent = '—';
     }
 
-    // Per-stroke work record W_1..W_4 and the net W
+    // Per-stroke work record W_1..W_4 and the net work, convention-free:
+    // magnitudes with a direction ("3.46 kJ out"), so the display holds under any
+    // sign convention (the course text, Hoch, takes W as work done on the gas).
     var cells = $('works').children;
     for (var i = 0; i < 4; i++) {
       var st = realStrokes[i], c = cells[i], w = t.works[i];
       c.className = 'wcell' + (w === null ? ' empty' : '') + (i === cur ? ' active' : '');
-      c.children[0].innerHTML = sub('W_' + (i + 1) + '  (' + st.from + '→' + st.to + ')');
-      c.children[1].textContent = w === null ? '—' : fmtkJ(w, true);
+      c.children[0].innerHTML = sub('W_' + (i + 1) + ' (' + st.from + '→' + st.to + ')');
+      c.children[1].textContent = w === null ? '—' : fmtkJ(Math.abs(w)) + ' ' + workDir(st);
     }
     var net = cells[4];
-    // W_k are work done BY the gas in both modes. Engine: net work out W = ΣW_k.
-    // Heat pump: net work in W = −ΣW_k, so the box shows ΣW_k = −W.
-    var sumWk = t.works.reduce(function (a, b) { return a + (b || 0); }, 0);
-    net.children[0].innerHTML = sub(engine ? 'W = ΣW_k' : 'ΣW_k = −W');
-    net.children[1].textContent = step === 5 ? fmtkJ(sumWk, true) : '—';
+    net.children[0].textContent = engine ? 'Net work out' : 'Net work in';
+    net.children[1].textContent = step === 5 ? fmtkJ(t.W) : '—';  // t.W is already out (engine) / in (heat pump)
     net.className = 'wcell net' + (step === 5 ? '' : ' empty');
 
     // Readout
@@ -920,10 +929,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports.carnotSelfCh
     var given = '<div class="given">' + givenLine() + '</div>';
     if (step === 5) {
       r.innerHTML = given +
-        '<div class="eq">' + sub('Q_H = W + Q_C') + '</div>' +
+        // |W| = net work magnitude, so these hold whatever sign convention W carries
+        '<div class="eq">' + sub('Q_H = |W| + Q_C') + '</div>' +
         '<div class="eq">' + (engine
-          ? sub('η = W/Q_H = 1 − T_C/T_H = ' + fmtNum(sum.etaCarnot * 100) + '%')
-          : sub('COP = Q_H/W = T_H/(T_H − T_C) = ' + fmtNum(sum.COPCarnot))) + '</div>';
+          ? sub('η = |W|/Q_H = 1 − T_C/T_H = ' + fmtNum(sum.etaCarnot * 100) + '%')
+          : sub('COP = Q_H/|W| = T_H/(T_H − T_C) = ' + fmtNum(sum.COPCarnot))) + '</div>';
     } else {
       r.innerHTML = given;
     }
